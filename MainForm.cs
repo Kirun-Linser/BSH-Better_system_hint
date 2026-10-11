@@ -33,6 +33,9 @@ public sealed class MainForm : Form
     private readonly ToolStripStatusLabel _profile = new();
     private readonly ToolStripStatusLabel _hint = new();
 
+    /// <summary>预设下拉：列出 profiles/presets/ 下可用的预设（含内置与用户自建）。</summary>
+    private readonly ComboBox _presetBox = new();
+
     /// <summary>主题切换按钮：三态循环（跟随系统 → 深色 → 浅色），文案形如「主题：跟随系统」。</summary>
     private readonly Button _themeButton = new();
 
@@ -215,6 +218,16 @@ public sealed class MainForm : Form
 
         buttons.Controls.Add(btnDefault);
         buttons.Controls.Add(btnPersonal);
+
+        // ── 预设：一个下拉 + 一个按钮 ──
+        // 预设 = 一套「事件 → 音频」映射（+ 可选规则集）。与上面两套方案并列：三者都是"一键换整套"。
+        _presetBox.DropDownStyle = ComboBoxStyle.DropDownList;
+        _presetBox.Width = 150;
+        _presetBox.Margin = new Padding(0, 0, 4, 0);
+        _presetBox.DisplayMember = nameof(PresetInfo.Name);
+        buttons.Controls.Add(_presetBox);
+        buttons.Controls.Add(MakeButton("应用预设…", ApplySelectedPreset));
+
         buttons.Controls.Add(MakeButton("▶ 试听", Preview));
         buttons.Controls.Add(MakeButton("替换音效…", Replace));
         buttons.Controls.Add(MakeButton("设为静音", Mute));
@@ -550,6 +563,7 @@ public sealed class MainForm : Form
         // 上面挂在 Layout 上的那次 BeginInvoke 完成，这里先给个合理的过渡值。
         PlaceScrollBar();
         SyncScrollBar();
+        RefreshPresets();   // 首次填充也走这里（构造函数最后调的就是 Reload）
 
         // 构建期（句柄还没建）不会收到 Layout 事件，所以这里补一次延迟同步
         if (_list.IsHandleCreated && !_list.IsDisposed)
@@ -807,6 +821,97 @@ public sealed class MainForm : Form
     /// 界面上不再有独立的"应用语音方案…"按钮 —— 统一走两个方案按钮，避免两个入口两套逻辑。
     /// </summary>
     public void ApplyVoiceScheme() => ApplyProfile(ProfileStore.PersonalId);
+
+    /// <summary>
+    /// 刷新预设下拉。没发现预设时按钮变灰并给一行说明，而不是抛异常（与 PresetStore 的容错口径一致）。
+    /// </summary>
+    private void RefreshPresets()
+    {
+        var problems = new List<string>();
+        var list = PresetStore.List(problems);
+        var keep = _presetBox.SelectedItem as PresetInfo;
+
+        _presetBox.BeginUpdate();
+        _presetBox.Items.Clear();
+        foreach (var p in list) _presetBox.Items.Add(p);
+        _presetBox.EndUpdate();
+
+        if (_presetBox.Items.Count == 0)
+        {
+            _presetBox.Enabled = false;
+            // 提示里用正斜杠：C# 字符串写反斜杠要双双转义，属于最容易写错的地方，没必要冒这个险
+            _hint.Text = "没发现预设：preset.json 放 profiles/presets/<id>/，音频放 %LOCALAPPDATA%/BSH/presets/<id>/sounds/";
+            return;
+        }
+
+        _presetBox.Enabled = true;
+        _presetBox.SelectedItem = keep is not null && _presetBox.Items.Contains(keep)
+            ? keep
+            : _presetBox.Items[0];
+    }
+
+    /// <summary>
+    /// 「应用预设…」：先把「会写多少 / 按偏好跳过多少 / 音频缺失多少」摆给用户看 → 确认 → 自动快照 → 写入。
+    /// <para>顺序与「Windows 原样」一致：<b>先停监听引擎，再写注册表</b>。</para>
+    /// <para>跳过偏好来自 personal/profile.json 的 skipFreq + skipEvents —— 那是「用户不想被改的槽」，
+    /// 与用哪套预设无关，所以应用任何预设都要尊重它。</para>
+    /// </summary>
+    private void ApplySelectedPreset()
+    {
+        if (_presetBox.SelectedItem is not PresetInfo info)
+        {
+            MessageBox.Show(this, "没有可用的预设。", "应用预设", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var preset = PresetStore.Load(info.Id, out var problem);
+        if (preset is null)
+        {
+            MessageBox.Show(this, $"读不到预设「{info.Name}」：{problem}", "应用预设",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var personal = ProfileStore.Find(ProfileStore.PersonalId);
+        var skip = personal is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : ProfileStore.PlanDetailed(personal).SkippedSlots
+                .Select(x => x.Event).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        int willWrite = preset.Sounds.Count(kv => !skip.Contains(kv.Key) && File.Exists(kv.Value));
+        int missing = preset.Sounds.Count(kv => !skip.Contains(kv.Key) && !File.Exists(kv.Value));
+        int skipped = preset.Sounds.Keys.Count(skip.Contains);
+
+        var preview = string.Join(Environment.NewLine, preset.Sounds.Keys
+            .Where(k => !skip.Contains(k) && File.Exists(preset.Sounds[k])).Take(10));
+        if (willWrite > 10) preview += $"{Environment.NewLine}… 其余 {willWrite - 10} 项";
+
+        var answer = MessageBox.Show(this,
+            $"将把「{info.Name}」的 {willWrite} 个事件槽指向该预设的语音。{Environment.NewLine}"
+            + $"（按你的跳过偏好不动 {skipped} 个；音频缺失跳过 {missing} 个）"
+            + $"{Environment.NewLine}{Environment.NewLine}{preview}"
+            + $"{Environment.NewLine}{Environment.NewLine}会写注册表（HKCU）。写之前自动快照，「Windows 原样」可还原。是否继续？",
+            "应用预设", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+        if (answer != DialogResult.OK) return;
+
+        try
+        {
+            MonitorHost.Stop();     // 先停引擎再写注册表（与 windows-default 同一顺序约定）
+            var snapPath = Path.Combine(_snapshotDir, $"auto-before-preset-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+            var r = PresetStore.Apply(preset, skip, snapPath);
+
+            Reload();
+            _hint.Text = $"已应用预设「{info.Name}」：{r.Written} 项";
+            MessageBox.Show(this,
+                $"完成：{r.Written} 个事件槽已按「{info.Name}」写入。{Environment.NewLine}快照：{r.SnapshotPath}",
+                "应用预设", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"应用预设失败：{ex.Message}", "应用预设",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
 
     private void SaveSnapshot()
     {
