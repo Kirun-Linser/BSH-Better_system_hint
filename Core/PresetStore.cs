@@ -332,8 +332,21 @@ public static class PresetStore
     {
         if (raw.StartsWith("sounds/", StringComparison.OrdinalIgnoreCase)
             || raw.StartsWith("sounds\\", StringComparison.OrdinalIgnoreCase))
-            // Path.GetFileName 同时认 / 与 \ 两种分隔符，省得在 C# 源码里写反斜杠字面量
-            return Path.Combine(PresetAudioDir(presetId), Path.GetFileName(raw));
+        {
+            var name = Path.GetFileName(raw);
+            // ① 正常运行位置：%LOCALAPPDATA%/BSH/presets/<id>/sounds/
+            var installed = Path.Combine(PresetAudioDir(presetId), name);
+            if (File.Exists(installed)) return installed;
+
+            // ② 回退：随 exe 一起分发的 profiles/presets/<id>/sounds/
+            //    —— 有它才谈得上「解压即用」：新环境（比如一台干净的虚拟机）把这个包解开，
+            //    不跑任何安装脚本、不装 ffmpeg、不设环境变量，预设就已经能用了。
+            var shipped = Path.Combine(PresetsDir, presetId, "sounds", name);
+            if (File.Exists(shipped)) return shipped;
+
+            // ③ 两处都没有：返回装机路径，让调用方按「文件不存在」处理（missing 计数 + 明确报出）
+            return installed;
+        }
 
         if (Path.IsPathRooted(raw)) return raw;
 
