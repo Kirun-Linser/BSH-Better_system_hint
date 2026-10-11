@@ -2,6 +2,16 @@
   "id": "mech-voice",
   "name": "机械女声",
   "description": "robotize 配方：电话带通 300–3500Hz + 40Hz 环形调制 + 12bit 量化（比 Close 略柔）。",
+  "produce": {
+    "how": "跑到 BSH 仓库根执行：python tools/make-mech-voice.py（可用环境变量 BSH_MECH_OUT 指定输出目录）",
+    "tool": "tools/make-mech-voice.py",
+    "steps": [
+      "1. python tools/make-mech-voice.py            # 生成 39 个 wav（需 ffmpeg + numpy）",
+      "2. 把生成的 wav 全部复制到本预设的 sounds/ 目录",
+      "3. 之后 --apply-preset mech-voice 即可使用"
+    ],
+    "needs": "ffmpeg（本机可从 music-code-mv 插件取）、numpy；离线可跑，不需要联网"
+  },
   "builtin": true,
   "note": "用户 2026-10-11 生成于桌面 BSH-yushe；音频随预设存放，不入公开仓库。",
   "sounds": {

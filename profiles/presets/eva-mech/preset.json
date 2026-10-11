@@ -2,6 +2,16 @@
   "id": "eva-mech",
   "name": "EVA 机械女声",
   "description": "Edge TTS（Michelle + Aria 谱形）+ V3 轻柔后处理；39 个事件槽全配语音。",
+  "produce": {
+    "how": "本预设是「Edge TTS 合成 + 后处理」的产物，需要联网",
+    "tool": "tools/make-edge-batch.py → tools/install-voice.ps1",
+    "steps": [
+      "1. 编辑 voice/lines.json（台词真源）",
+      "2. python tools/make-edge-batch.py                 # Edge TTS 合成（需联网，内建 6 次重试）",
+      "3. 把 voice/edge-batch/out/*.wav 复制到本预设的 sounds/（文件名需为「中文,英文.wav」）"
+    ],
+    "needs": "edge-tts 7.2.8 + ffmpeg + numpy；需要访问 speech.platform.bing.com"
+  },
   "builtin": true,
   "note": "音频随预设存放（profiles/presets/<id>/sounds/），不入公开仓库：体积大且涉及音源授权。",
   "sounds": {
