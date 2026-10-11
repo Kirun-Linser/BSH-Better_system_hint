@@ -177,7 +177,9 @@ public static class AppTheme
         nativeControls: false,
         background: ThemePalette.Hex("#0F172A"),          // 窗体背景
         foreground: ThemePalette.Hex("#F8FAFC"),          // 前景文字
-        surface: ThemePalette.Hex("#1B2336"),             // 表格普通行 / 输入区 / 下拉框
+        // 表格普通行 / 输入区 / 下拉框 / 深色档按钮底。2026-10-11 用户反馈原值 #1B2336(27,35,54)
+        // 的蓝调刺眼，改为中性深灰 #1B1B1C(27,27,28)。
+        surface: ThemePalette.Hex("#1B1B1C"),
         // 表格交替行（比普通行略暗）。2026-10-11 用户反馈原值 #151C2E(21,28,46) 的蓝调刺眼，
         // 改为中性深灰 #151517(21,21,23)。托盘菜单的悬停底色也用这个值（见 DarkMenuRenderer）。
         alternatingRow: ThemePalette.Hex("#151517"),
