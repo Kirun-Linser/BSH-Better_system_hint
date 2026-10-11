@@ -1,0 +1,90 @@
+[
+  {
+    "id": "kbd-capslock",
+    "name": "示例·键盘：按 CapsLock / 音量键时提示",
+    "enabled": false,
+    "kind": "Keyboard",
+    "match": "CapsLock,VolumeUp,VolumeDown",
+    "sound": "",
+    "speakKey": "MenuCommand",
+    "cooldownMs": 300,
+    "$comment": "【键盘】match 写虚拟键名（与 VirtualKeyNames 表同名：CapsLock / F24 / VolumeUp …），多个条件用 , ; | 分隔，写 * 或留空 = 任意键；Shift/Ctrl/Alt/Win 这类通用名会同时命中左右键。声音二选一：sound 填 wav 绝对路径，或 speakKey 填语音方案（voice-scheme.json）里的事件名 —— 本条的 MenuCommand 就取自那里。"
+  },
+  {
+    "id": "mouse-buttons",
+    "name": "示例·鼠标：侧键 / 滚轮时提示",
+    "enabled": false,
+    "kind": "Mouse",
+    "match": "XButtonDown1,WheelUp,WheelDown",
+    "sound": "",
+    "speakKey": "",
+    "cooldownMs": 200,
+    "$comment": "【鼠标】match 写事件名：LeftDown/LeftUp/RightDown/RightUp/MiddleDown/MiddleUp/XButtonDown1/XButtonUp1/WheelUp/WheelDown/WheelLeft/WheelRight（只报按键与滚轮，不报移动）。sound 与 speakKey 都留空 = 只记账不出声。"
+  },
+  {
+    "id": "win-switch-notepad",
+    "name": "示例·窗口：切到记事本时提示",
+    "enabled": false,
+    "kind": "WindowSwitch",
+    "match": "notepad.exe",
+    "sound": "",
+    "speakKey": "",
+    "cooldownMs": 800,
+    "$comment": "【窗口切换】match 写进程名（notepad.exe，整词相等）或窗口标题关键词（如 记事本，包含匹配即可）。事件明细形如 notepad.exe|无标题 - 记事本。"
+  },
+  {
+    "id": "proc-start-steam",
+    "name": "示例·进程：Steam 启动时提示",
+    "enabled": false,
+    "kind": "ProcessStartStop",
+    "match": "start steam.exe",
+    "sound": "",
+    "speakKey": "",
+    "cooldownMs": 1500,
+    "$comment": "【进程启停】match 写进程名（写 steam.exe 则启动与退出都命中），要限定方向就加前缀：start steam.exe / stop steam.exe。机制是进程快照对比轮询，不是 WMI；轮询间隔见 ProcessMonitor.DefaultPollMs。"
+  },
+  {
+    "id": "device-usb",
+    "name": "示例·设备：U 盘插拔时提示",
+    "enabled": false,
+    "kind": "DeviceChange",
+    "match": "Arrival,Remove",
+    "sound": "",
+    "speakKey": "SystemAsterisk",
+    "cooldownMs": 500,
+    "$comment": "【设备插拔】match 只能写两个枚举名：Arrival（设备到达）/ Remove（设备移除）；卷设备的明细还会带盘符，形如 Arrival D:。"
+  },
+  {
+    "id": "power-session",
+    "name": "示例·电源 / 会话：插拔电源、锁屏解锁",
+    "enabled": false,
+    "kind": "PowerSession",
+    "match": "AC,DC,Lock,Unlock",
+    "sound": "",
+    "speakKey": "SystemHand",
+    "cooldownMs": 500,
+    "$comment": "【电源会话】match 写枚举名：AC（接上电源）/ DC（改用电池）/ Suspend / Resume / BatteryLow / Lock（锁屏）/ Unlock / Logon / Logoff。"
+  },
+  {
+    "id": "clipboard-text",
+    "name": "示例·剪贴板：复制文本时提示",
+    "enabled": false,
+    "kind": "Clipboard",
+    "match": "Text",
+    "sound": "",
+    "speakKey": "",
+    "cooldownMs": 1000,
+    "$comment": "【剪贴板】match 写 Text / Image / Files。明细是当前里有的类型、多类型用 + 连接（如 Text+Image），条件按「整段相等」判：写 Text 命中纯文本，要覆盖图文混装得写 Text+Image。"
+  },
+  {
+    "id": "fs-downloads",
+    "name": "示例·文件：下载目录有变化时提示",
+    "enabled": false,
+    "kind": "FileSystem",
+    "match": "C:\\Users\\<你的用户名>\\Downloads",
+    "sound": "C:\\Windows\\Media\\Windows Notify System Generic.wav",
+    "speakKey": "",
+    "cooldownMs": 500,
+    "$comment": "【文件变化】match 写**目录绝对路径**（该目录下新建 / 修改 / 删除 / 改名都会命中；只盯这一层、不递归）。目录不存在会被跳过并在监听状态里提示。这条顺带示范 sound 写 wav 绝对路径的形态。"
+  }
+]

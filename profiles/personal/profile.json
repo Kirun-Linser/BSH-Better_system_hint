@@ -1,0 +1,9 @@
+{
+  "id": "personal",
+  "name": "个性化设置",
+  "kind": "Monitor",
+  "applyVoiceScheme": true,
+  "skipFreq": [],
+  "skipEvents": ["CCSelect", "Open", "Close"],
+  "note": "个性化 = 改写系统提示音 + 启用监听（两件事一起做）。applyVoiceScheme=true 时先把 59 个系统声音事件槽指向 %LOCALAPPDATA%\\BSH\\sounds\\voice-scheme.json 里的自制语音，成功后再启动监听引擎：按 profiles\\personal\\rules.json 里启用的规则安装监听器（键盘/鼠标/窗口/进程/设备/电源/剪贴板/文件），命中时播放个性化提示音。跳过有两个键、叠加生效（并集）：skipFreq 按频率档整档跳（[] = 一档都不跳），skipEvents 按事件名精确跳（[] = 一个事件都不跳）。当前组合 = skipFreq [] + skipEvents [] ⇒ 写满 59 槽（用户 2026-10-11 定稿：F5 界面音全开。依据是实测——Windows 播系统音效用 SND_ASYNC 打断式，同一秒内多次触发只会听到最后一声，所以原先担心的「多次响」不成立；真要精细排除时再用这两个键）。同一事件两处都命中时只算一次（先按档判、再按事件判）。规则表是个人配置不入库，起点见公开示例 rules.example.json"
+}

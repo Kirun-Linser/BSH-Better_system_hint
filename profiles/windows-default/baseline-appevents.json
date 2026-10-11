@@ -1,0 +1,297 @@
+[
+  {
+    "Event": ".Default",
+    "Wav": "C:\\WINDOWS\\media\\Windows Background.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "AppGPFault",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "CCSelect",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "ChangeTheme",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "Close",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "CriticalBatteryAlarm",
+    "Wav": "C:\\WINDOWS\\media\\Windows Foreground.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "DeviceConnect",
+    "Wav": "C:\\WINDOWS\\media\\Windows Hardware Insert.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "DeviceDisconnect",
+    "Wav": "C:\\WINDOWS\\media\\Windows Hardware Remove.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "DeviceFail",
+    "Wav": "C:\\WINDOWS\\media\\Windows Hardware Fail.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "FaxBeep",
+    "Wav": "C:\\WINDOWS\\media\\Windows Notify Email.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "LowBatteryAlarm",
+    "Wav": "C:\\WINDOWS\\media\\Windows Background.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "MailBeep",
+    "Wav": "C:\\WINDOWS\\media\\Windows Notify Email.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "Maximize",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "MenuCommand",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "MenuPopup",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "MessageNudge",
+    "Wav": "C:\\WINDOWS\\media\\Windows Message Nudge.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "Minimize",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "Notification.Default",
+    "Wav": "C:\\WINDOWS\\media\\Windows Notify System Generic.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "Notification.IM",
+    "Wav": "C:\\WINDOWS\\media\\Windows Notify Messaging.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "Notification.Looping.Alarm",
+    "Wav": "%SystemRoot%\\media\\Alarm01.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Alarm10",
+    "Wav": "%SystemRoot%\\media\\Alarm10.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Alarm2",
+    "Wav": "%SystemRoot%\\media\\Alarm02.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Alarm3",
+    "Wav": "%SystemRoot%\\media\\Alarm03.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Alarm4",
+    "Wav": "%SystemRoot%\\media\\Alarm04.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Alarm5",
+    "Wav": "%SystemRoot%\\media\\Alarm05.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Alarm6",
+    "Wav": "%SystemRoot%\\media\\Alarm06.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Alarm7",
+    "Wav": "%SystemRoot%\\media\\Alarm07.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Alarm8",
+    "Wav": "%SystemRoot%\\media\\Alarm08.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Alarm9",
+    "Wav": "%SystemRoot%\\media\\Alarm09.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call",
+    "Wav": "%SystemRoot%\\media\\Ring01.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call10",
+    "Wav": "%SystemRoot%\\media\\Ring10.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call2",
+    "Wav": "%SystemRoot%\\media\\Ring02.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call3",
+    "Wav": "%SystemRoot%\\media\\Ring03.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call4",
+    "Wav": "%SystemRoot%\\media\\Ring04.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call5",
+    "Wav": "%SystemRoot%\\media\\Ring05.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call6",
+    "Wav": "%SystemRoot%\\media\\Ring06.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call7",
+    "Wav": "%SystemRoot%\\media\\Ring07.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call8",
+    "Wav": "%SystemRoot%\\media\\Ring08.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Looping.Call9",
+    "Wav": "%SystemRoot%\\media\\Ring09.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "Notification.Mail",
+    "Wav": "C:\\WINDOWS\\media\\Windows Notify Email.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "Notification.Proximity",
+    "Wav": "C:\\WINDOWS\\media\\Windows Proximity Notification.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "Notification.Reminder",
+    "Wav": "C:\\WINDOWS\\media\\Windows Notify Calendar.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "Notification.SMS",
+    "Wav": "C:\\WINDOWS\\media\\Windows Notify Messaging.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "Open",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "PrintComplete",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "ProximityConnection",
+    "Wav": "C:\\WINDOWS\\media\\Windows Proximity Connection.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "RestoreDown",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "RestoreUp",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "ShowBand",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "SystemAsterisk",
+    "Wav": "C:\\WINDOWS\\media\\Windows Background.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "SystemExclamation",
+    "Wav": "C:\\WINDOWS\\media\\Windows Background.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "SystemExit",
+    "Wav": null,
+    "Kind": "Missing"
+  },
+  {
+    "Event": "SystemHand",
+    "Wav": "C:\\WINDOWS\\media\\Windows Foreground.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "SystemNotification",
+    "Wav": "C:\\WINDOWS\\media\\Windows Background.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "SystemQuestion",
+    "Wav": "",
+    "Kind": "String"
+  },
+  {
+    "Event": "WindowsLogoff",
+    "Wav": null,
+    "Kind": "Missing"
+  },
+  {
+    "Event": "WindowsLogon",
+    "Wav": "%SystemRoot%\\media\\Windows Logon.wav",
+    "Kind": "ExpandString"
+  },
+  {
+    "Event": "WindowsUAC",
+    "Wav": "C:\\WINDOWS\\media\\Windows User Account Control.wav",
+    "Kind": "String"
+  },
+  {
+    "Event": "WindowsUnlock",
+    "Wav": "%SystemRoot%\\media\\Windows Unlock.wav",
+    "Kind": "ExpandString"
+  }
+]

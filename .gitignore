@@ -1,0 +1,37 @@
+# ⚠️ 注意：.gitignore **不支持行尾注释** —— 模式后面跟 `# 说明` 会让整行失效。
+#    所有说明一律独占一行（历史遗留的行尾注释曾导致 voice/ 与 rules.json 漏进公开仓库）。
+# 验证：`git check-ignore -v <路径>` 能打印出命中它的规则。
+
+# ── 构建产物 ─────────────────────────────────────────
+bin/
+obj/
+dist/
+dist-new/
+
+# ── 本地素材 / 中间产物 ──────────────────────────────
+# 自制音频的工作目录（原始素材 + 中间产物，约 86 MB）
+voice/
+# --report 的默认输出
+report.json
+# 验收脚本的产物：含本机绝对路径
+verify-profiles-*.json
+
+# ── 交接文档 ─────────────────────────────────────────
+# 含个人环境路径（.dotnet / 快照目录 / 进程白名单），不入公开库
+HANDOVER.md
+
+# ── IDE / Python 缓存 ────────────────────────────────
+BSH.csproj.user
+__pycache__/
+*.pyc
+
+# ── 个人配置：只保留目录骨架，音频一律不入库 ─────────
+profiles/personal/sounds/*
+!profiles/personal/sounds/.gitkeep
+# 监听规则表：个人配置（什么时候想被提醒），不入公开仓库
+profiles/personal/rules.json
+# 公开示例（8 类监听各一条、全部默认禁用）：**必须入库**，别被上面的规则误伤
+!profiles/personal/rules.example.json
+
+# ── 备份文件 ─────────────────────────────────────────
+*.bak

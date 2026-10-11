@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- exe 自身在资源管理器/任务栏上显示的图标 -->
+    <ApplicationIcon>Assets\bsh-tray.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
+    <Product>BSH · 更好的系统提示</Product>
+    <FileVersion>0.1.0.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 托盘与窗体图标：作为嵌入资源随程序集走，运行时从流加载。
+         LogicalName 固定成 BSH.AppIcon.ico，代码里就不用管命名空间与路径。 -->
+    <EmbeddedResource Include="Assets\bsh-tray.ico" LogicalName="BSH.AppIcon.ico" />
+  </ItemGroup>
+
+</Project>
