@@ -86,5 +86,17 @@
     "speakKey": "",
     "cooldownMs": 500,
     "$comment": "【文件变化】match 写**目录绝对路径**（该目录下新建 / 修改 / 删除 / 改名都会命中；只盯这一层、不递归）。目录不存在会被跳过并在监听状态里提示。这条顺带示范 sound 写 wav 绝对路径的形态。"
+  },
+  {
+    "id": "app-open-chrome",
+    "name": "Chrome 启动时播「打开」",
+    "enabled": false,
+    "kind": "ProcessStartStop",
+    "app": "chrome.exe",
+    "match": "start",
+    "sound": "",
+    "speakKey": "Open",
+    "cooldownMs": 1500,
+    "$comment": "app 字段（2026-10-11 新增）：限定「哪个应用」。目前只有 ProcessStartStop 支持它 —— 匹配的是事件里的那个进程名，不是前台窗口。所以这里 app 管哪个程序、match 只管方向（start / stop）。多个应用用逗号分隔，如 app: \"chrome.exe,msedge.exe\"；漏写 .exe 不会被当成模糊匹配（整词相等），该规则就永不命中。其它 7 类填 app 同样永不命中（安全侧：宁可不出声，也不乱出声）。"
   }
 ]

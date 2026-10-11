@@ -212,6 +212,7 @@ JSON 用**小写驼峰**（`RuleStore` 的序列化策略是 `CamelCase` + 属�
 | `enabled` | bool | `false` 的规则不参与匹配，**也不会让引擎去装对应的监听器** |
 | `kind` | string | 事件类别枚举名（`Keyboard` / `Mouse` / `WindowSwitch` / `ProcessStartStop` / `DeviceChange` / `PowerSession` / `Clipboard` / `FileSystem`）—— **不要改名**，改了用户已有规则会解析失败（`MonitoringRule.cs:7`） |
 | `match` | string | 条件表达式，**语义由各类监听器定义**；多个条件用 `,` `;` `\|` 分隔，忽略大小写；空或 `*` = 全部命中（`MonitorMatcher.cs:20`、`MonitorMatcher.cs:31`） |
+| `app` | string | **限定哪个应用**（可选，空 = 不限）—— 2026-10-11 新增。⚠️ **语义按 `kind` 而定，目前只有 `ProcessStartStop` 实现了它**：那时匹配的是**事件里的那个进程名**（启动/退出的目标），**不是前台窗口**。于是可以写成 `app: "chrome.exe"` + `match: "start"`：`app` 管哪个程序、`match` 只管方向。写法与 `match` 一致（整词、忽略大小写、多值用 `,` `;` `\|`）；⚠️ 漏写 `.exe` 不会模糊匹配，该规则将**永不命中**。其它 7 类填了 `app` 同样永不命中（刻意选的安全侧） |
 | `sound` | string | 要播的 wav **绝对路径**；非空时优先于 `speakKey`（`MonitorEngine.cs:310`） |
 | `speakKey` | string | 语音方案（`voice-scheme.json`）里的事件名，如 `DeviceConnect`（`MonitorEngine.cs:315`） |
 | `cooldownMs` | int | 同一规则的最小触发间隔，防抖；`0` = 不限制；默认 `800`（`MonitoringRule.cs:81`） |

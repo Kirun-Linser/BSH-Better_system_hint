@@ -78,5 +78,18 @@ public sealed class MonitorRule
     public string? SpeakKey { get; set; }
 
     /// <summary>同一规则的最小触发间隔（毫秒），用于防抖；<c>0</c> = 不限制。</summary>
+    /// <summary>
+    /// 限定「哪个应用」（可选，空 = 不限）。
+    /// <para><b>语义按 <see cref="Kind"/> 而定</b>，目前只有 <see cref="MonitorEventKind.ProcessStartStop"/>
+    /// 实现了它 —— 那时匹配的是<b>事件里的那个进程名</b>（启动/退出的目标），<b>不是</b>前台窗口。
+    /// 于是可以写成 <c>app: "chrome.exe"</c> + <c>match: "start"</c>：
+    /// <c>app</c> 管哪个程序、<c>match</c> 只管方向（启动还是退出）。</para>
+    /// <para>其它 7 类尚未实现该维度（需要跟踪前台窗口，方案见 docs/plans/）；<b>给它们填 app 会导致永不命中</b>
+    /// —— 这是刻意选的「安全侧」：宁可不出声，也不要乱出声。</para>
+    /// <para>写法与 <see cref="Match"/> 一致：整词、忽略大小写，多个用 <c>,</c> / <c>;</c> / <c>|</c> 分隔。</para>
+    /// </summary>
+    public string App { get; set; } = "";
+
+    /// <summary>同一规则的最小触发间隔（毫秒），防抖；0 = 不限制。</summary>
     public int CooldownMs { get; set; } = 800;
 }

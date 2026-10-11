@@ -10,12 +10,23 @@ namespace BSH.Core.Monitoring;
 /// </summary>
 public static class MonitorMatcher
 {
-    /// <summary>判断一个事件明细是否满足某条规则的条件。</summary>
-    public static bool IsMatch(MonitorRule rule, string detail) => IsMatch(rule.Kind, rule.Match, detail);
+    /// <summary>判断一个事件明细是否满足某条规则的条件（含该规则的应用限定）。</summary>
+    public static bool IsMatch(MonitorRule rule, string detail)
+        => IsMatch(rule.Kind, rule.Match, detail, rule.App);
 
-    /// <summary>判断一个事件明细是否满足指定类别与条件。</summary>
-    public static bool IsMatch(MonitorEventKind kind, string? match, string detail)
+    /// <summary>
+    /// 判断一个事件明细是否满足指定类别与条件。
+    /// <para><paramref name="app"/> 非空时，先要求这条事件的「归属进程」匹配它 —— 见 <see cref="OwnerProcess"/>。
+    /// 归属未知（其它 7 类）时<b>直接不命中</b>：宁可不出声，也不要乱出声。</para>
+    /// </summary>
+    public static bool IsMatch(MonitorEventKind kind, string? match, string detail, string? app = null)
     {
+        if (!string.IsNullOrWhiteSpace(app))
+        {
+            var owner = OwnerProcess(kind, detail);
+            if (owner.Length == 0 || !MatchApp(app, owner)) return false;
+        }
+
         var items = Split(match);
         if (items.Length == 0) return true;                 // 未写条件 = 全部命中
 
@@ -24,6 +35,25 @@ public static class MonitorMatcher
             if (item == "*") return true;
             if (MatchItem(kind, item, detail)) return true;
         }
+        return false;
+    }
+
+    /// <summary>
+    /// 这条事件「属于哪个程序」。目前只有 <see cref="MonitorEventKind.ProcessStartStop"/> 能给出答案
+    /// （明细固定为 <c>start 名字</c> / <c>stop 名字</c>，名字就是目标进程）；其余返回空串。
+    /// </summary>
+    private static string OwnerProcess(MonitorEventKind kind, string detail)
+    {
+        if (kind != MonitorEventKind.ProcessStartStop) return "";
+        int sp = detail.IndexOf(' ');
+        return sp > 0 ? detail[(sp + 1)..].Trim() : "";
+    }
+
+    /// <summary>应用限定词的匹配：整词、忽略大小写，支持多个用 <c>,</c> / <c>;</c> / <c>|</c> 分隔。</summary>
+    private static bool MatchApp(string? app, string owner)
+    {
+        foreach (var item in Split(app))
+            if (item == "*" || item.Equals(owner, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
 
@@ -82,6 +112,13 @@ public static class MonitorMatcher
         int sp = detail.IndexOf(' ');
         string action = sp > 0 ? detail[..sp] : "";
         string name = sp > 0 ? detail[(sp + 1)..] : detail;
+
+        // 只写方向的形态（配合 rule.App 用）：app 管哪个程序，match 只写 start / stop。
+        // 没有这一支的话 `match: "start"` 会落进下面的 Equals(name) 分支而永不命中。
+        if (item.Equals("start", StringComparison.OrdinalIgnoreCase))
+            return action.Equals("start", StringComparison.OrdinalIgnoreCase);
+        if (item.Equals("stop", StringComparison.OrdinalIgnoreCase))
+            return action.Equals("stop", StringComparison.OrdinalIgnoreCase);
 
         if (item.Equals(name, StringComparison.OrdinalIgnoreCase)) return true;   // 不限定方向
 
