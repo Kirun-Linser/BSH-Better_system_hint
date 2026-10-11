@@ -26,6 +26,9 @@ public sealed class MainForm : Form
     /// </summary>
     private readonly DataGridView _list = new();
 
+    /// <summary>自绘的深色滚动条：替代 DataGridView 自带的系统浅色滚动条（理由见 <see cref="BuildUi"/> 内注释）。</summary>
+    private readonly DarkScrollBar _bar = new();
+
     private readonly ToolStripStatusLabel _summary = new();
     private readonly ToolStripStatusLabel _profile = new();
     private readonly ToolStripStatusLabel _hint = new();
@@ -120,8 +123,14 @@ public sealed class MainForm : Form
         // ⚠️ 2026-10-11 用户截图指出"右侧白块"：DataGridView 的滚动条是**它自己画的**，
         // 不是标准 ScrollBar 控件 —— 实测 SetWindowTheme(handle,"DarkMode_Explorer") 虽返回 S_OK，
         // 但 AllowDarkModeForWindow 返回 False（窗口根本不支持深色外观），所以那条滚动条永远是系统的浅色。
-        // 唯一干净的解法是**不让它画**：关掉内置滚动条，靠鼠标滚轮/键盘导航（59 行列表滚轮足够用）。
-        _list.ScrollBars = ScrollBars.None;
+        // ⚠️ 2026-10-11 探针实测推翻了上一版的做法：曾经用 `ScrollBars = None`「不让它画」，
+        // 但那样连**鼠标滚轮一起失效** —— 实测发 WM_MOUSEWHEEL 后 FirstDisplayedScrollingRowIndex
+        // 从 0 到 0 纹丝不动；而 ScrollBars = Vertical 时同一条消息让它 0 → 5。
+        // 59 行的表只显示得下 20 行 ⇒ 关掉滚动条 = 后 39 行既没条也没滚轮，根本够不着。
+        // 现在的做法：**保留 Vertical**（滚轮 / 键盘 / 原生滚动逻辑全留着），只把它的内部 VScrollBar
+        // 设成不可见（实测 Visible=false / 移出可视区 / Width=0 三种藏法都不影响滚轮），
+        // 再把 DarkScrollBar 贴在原本的位置上自绘 —— 见 HideNativeScrollBar / SyncScrollBar。
+        _list.ScrollBars = ScrollBars.Vertical;
         // 打开双缓冲：DataGridView 默认关着它，选中 / 滚动时会先刷一遍底色再画内容 ——
         // 视觉上就是"慢半拍"地闪一下。它是 protected 属性，只能反射开（WinForms 通行做法；
         // 失败无副作用，只是少一点顺滑，功能与颜色完全不受影响）。
@@ -137,6 +146,34 @@ public sealed class MainForm : Form
         }
         // 表格自己的句柄与窗体句柄是分两步创建的：滚动条换主题只能等它建好再补做一次
         _list.HandleCreated += (_, _) => ApplyNativeChrome();
+
+        // ── 深色滚动条：与表格双向同步 ──
+        // 表格 → 自绘条：Scroll 事件在滚轮 / 拖动 / 键盘导航后都会触发（实测滚一次触发 5 次，
+        // 每滚过一行一次），是最可靠的同步信号。
+        _list.Scroll += (_, _) => SyncScrollBar();
+        // 自绘条 → 表格：用户在条上拖动 / 点轨道 / 滚轮
+        _bar.Scrolled += (_, _) => _list.FirstDisplayedScrollingRowIndex = _bar.Value;
+        // 表格每次重算布局都可能把原生条设回可见，顺手再藏一遍（幂等，代价只是几次属性写入）
+        // 位置与滚动范围都要在布局**真正**完成后再算，而「Layout 事件」比那还早一拍：
+        // 探针实测在它里面读 DisplayedRowCount 拿到的是上一轮的值（窗口放大到 1200x900 后可见行 29，
+        // 自绘条 LargeChange 却还是 20；缩回去又反过来）。BeginInvoke 排到当前消息之后才是真布局完。
+        _list.Layout += (_, _) =>
+        {
+            if (!_list.IsHandleCreated || _list.IsDisposed) return;
+            try
+            {
+                _list.BeginInvoke(new Action(() =>
+                {
+                    if (_list.IsDisposed) return;
+                    PlaceScrollBar();
+                    SyncScrollBar();
+                }));
+            }
+            catch (InvalidOperationException)
+            {
+                // 句柄在排队与执行之间消失（窗体正在关闭）：这次刷新丢掉即可
+            }
+        };
         // 列宽比例（设计规格，勿随手改）：当前音效最长，所以给它 38 —— 它正是原来被截断的那一列
         _list.Columns.Add(NewColumn("事件", 22));
         _list.Columns.Add(NewColumn("说明", 24));
@@ -211,7 +248,22 @@ public sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.Controls.Add(_list, 0, 0);
+        // 表格 + 深色滚动条：**叠放**，不是并排。表格 Dock=Fill 占满容器，它自带的滚动条就长在
+        // 最右侧那一小条里；自绘条按绝对坐标压在**同一个位置**上并提到最前，把那条系统浅色滚动条
+        // 整个盖住。它占的那点宽度正好就是自绘条要用的宽度，所以数据区可见宽度不变。
+        //
+        // 为什么不干脆把自带滚动条**藏起来**（试过一版，不可靠）：它的可见性由 DataGridView 自己维护 ——
+        // 探针实测「Reload 末尾 + Layout 事件」两处同步隐藏都盖不住它随后的设置（仍测到可见数 = 1）。
+        // 盖住它则不依赖任何时序，也不需要在每次布局后抢着隐藏。
+        var listHost = new Panel { Dock = DockStyle.Fill };
+        listHost.Controls.Add(_list);
+        listHost.Controls.Add(_bar);
+        _bar.BringToFront();               // 必须在最前，否则压不住表格自带的滚动条
+        // 尺寸一变就要重摆：这两个事件在布局过程中就会触发，不必等 Layout 那一拍
+        _list.ClientSizeChanged += (_, _) => PlaceScrollBar();
+        listHost.ClientSizeChanged += (_, _) => PlaceScrollBar();
+
+        root.Controls.Add(listHost, 0, 0);
         root.Controls.Add(buttons, 0, 1);
         root.Controls.Add(status, 0, 2);
         Controls.Add(root);
@@ -301,6 +353,7 @@ public sealed class MainForm : Form
         }
 
         RecolorRows();
+        _bar.Invalidate();     // 自绘滚动条的颜色也取自调色板，切主题要跟着重画
         Invalidate(true);
     }
 
@@ -354,6 +407,50 @@ public sealed class MainForm : Form
         bool dark = AppTheme.Current == ThemeKind.Dark;
         AppTheme.ApplyTitleBar(this, dark);                                        // 标题栏：20 → 19 回退，失败静默
         if (_list.IsHandleCreated) AppTheme.ApplyScrollBarTheme(_list, dark);      // 表格滚动条：DarkMode_Explorer
+    }
+
+    /// <summary>
+    /// 把表格的滚动状态同步给自绘滚动条（可见行数 / 最大首行 / 当前首行）。
+    /// <para>三项全部从 <see cref="DataGridView"/> 的公开属性<b>现算</b>，不缓存：行数会被「刷新」与
+    /// 方案切换改变，可见行数会随窗口大小改变，缓存任何一项都会让滑块长度或位置错掉。</para>
+    /// </summary>
+    private void SyncScrollBar()
+    {
+        int visible = Math.Max(1, _list.DisplayedRowCount(false));
+        _bar.LargeChange = visible;
+        _bar.Maximum = Math.Max(0, _list.RowCount - visible);
+        _bar.SyncFrom(_list.FirstDisplayedScrollingRowIndex);
+        PlaceScrollBar();   // Maximum 刚定下来，可见性与位置一起定（不需要滚动时不该占位）
+    }
+
+    /// <summary>
+    /// 把 <see cref="DataGridView"/> <b>自带的</b>滚动条藏起来。为什么不干脆关掉 <c>ScrollBars</c>：见
+    /// <see cref="BuildUi"/> 里的对照实测（关掉它会让鼠标滚轮一起失效）。
+    /// <para>
+    /// ⚠️ 真正兜底的是 <see cref="DarkGrid.OnLayout"/>（DataGridView 每次内部布局跑完都会强制藏一遍）；
+    /// 这里与 <see cref="Reload"/> 末尾各留一次，只是为了让"刚换完行数"这一刻不留空窗。
+    /// </para>
+    /// </summary>
+    /// <summary>
+    /// 把自绘滚动条摆到表格<b>自带那条滚动条的正上方</b>（位置与宽度都实测取值，不假设它一定是 17px ——
+    /// DPI 一变宽度就变）。
+    /// <para>为什么是"盖住"而不是"藏起来"：见 <see cref="BuildUi"/> 里的说明 —— 藏起来的做法要在每次
+    /// 布局后抢时机，实测抢不赢；盖住则与时机无关。它只在行数多到需要滚动时才有存在的必要，
+    /// 所以顺手把可见性也一起定下来。</para>
+    /// </summary>
+    private void PlaceScrollBar()
+    {
+        // 宽度取自带滚动条的实际值（DPI 缩放时会变），取不到就退回 17
+        var native = _list.Controls.OfType<VScrollBar>().FirstOrDefault();
+        int w = native is not null && native.Width > 0 ? native.Width : 17;
+
+        // 位置**自己算**，刻意不读 native.Bounds —— 那个值由 DataGridView 在布局很靠后的阶段才写入：
+        // 探针实测窗体刚显示时读到的是表格还很窄时的旧坐标（{X=223,Y=0,Width=17,Height=80}，
+        // 而此刻真正的目标是 {X=997,Y=0,17,541}）。_list.ClientSize 在那一刻已经是最终值，可靠。
+        _bar.Bounds = new Rectangle(
+            _list.Left + Math.Max(0, _list.ClientSize.Width - w), _list.Top, w, _list.ClientSize.Height);
+
+        _bar.Visible = _bar.Maximum > 0;   // 不需要滚动时不占位（与自带滚动条的出现条件一致）
     }
 
     /// <summary>窗体句柄创建：把深色标题栏补上（必须在句柄之后，理由见 <see cref="ApplyNativeChrome"/>）。</summary>
@@ -446,6 +543,18 @@ public sealed class MainForm : Form
             row.DefaultCellStyle.ForeColor = ColorForState(state);
         }
         _list.ResumeLayout();
+
+        // 行数变了：滚动范围要重算。此刻表格还没排完版，可见行数读不准 —— 真正的定稿由
+        // 上面挂在 Layout 上的那次 BeginInvoke 完成，这里先给个合理的过渡值。
+        PlaceScrollBar();
+        SyncScrollBar();
+
+        // 构建期（句柄还没建）不会收到 Layout 事件，所以这里补一次延迟同步
+        if (_list.IsHandleCreated && !_list.IsDisposed)
+        {
+            try { _list.BeginInvoke(new Action(() => { PlaceScrollBar(); SyncScrollBar(); })); }
+            catch (InvalidOperationException) { /* 句柄刚消失：忽略 */ }
+        }
 
         int empty = _sounds.Count(x => x.IsEmpty);
         _summary.Text = $"共 {_sounds.Count} 个事件　·　空槽 {empty}　·　撞车 {dupes.Count} 组";
