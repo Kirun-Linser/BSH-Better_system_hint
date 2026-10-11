@@ -45,6 +45,33 @@ public sealed class TrayContext : ApplicationContext
         _menu.Items.Add(_statusItem);
         _menu.Items.Add("打开音效素材目录", null, (_, _) => OpenMediaDir());
         _menu.Items.Add("打开快照目录", null, (_, _) => OpenSnapshotDir());
+
+        // 开机自启动：勾选即写 HKCU 的 Run 键（用户级，不需要管理员）。
+        // 与「BSH 接管」是一对：接管把提示音交给 BSH 判断，那就得保证 BSH 开机就在跑。
+        var autoStartItem = new ToolStripMenuItem("开机自启动")
+        {
+            CheckOnClick = true,
+            Checked = AutoStart.IsEnabled,
+        };
+        autoStartItem.Click += (_, _) =>
+        {
+            if (autoStartItem.Checked)
+            {
+                if (AutoStart.Enable() is null)
+                {
+                    autoStartItem.Checked = false;
+                    MessageBox.Show("写入开机自启动失败（注册表 HKCU 的 Run 键不可写）。",
+                        "BSH", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+            else if (!AutoStart.Disable())
+            {
+                autoStartItem.Checked = true;
+                MessageBox.Show("取消开机自启动失败。", "BSH",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        };
+        _menu.Items.Add(autoStartItem);
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add("退出（会停止监听）", null, (_, _) => ExitApp());
 
@@ -64,7 +91,8 @@ public sealed class TrayContext : ApplicationContext
         };
 
         // 兜底：任何退出路径（含系统注销）都不留钩子
-        Application.ApplicationExit += (_, _) => SafeStop();
+        // 兜底：任何退出路径（含系统注销）都不留钩子；接管模式下还要把系统提示音还原
+        Application.ApplicationExit += (_, _) => { SafeStop(); RestoreIfTakeover(); };
 
         ApplyMenuTheme();                      // 托盘菜单不在控件树里，必须单独上色
         AppTheme.Changed += ApplyMenuTheme;    // 切主题时跟着变
@@ -234,6 +262,27 @@ public sealed class TrayContext : ApplicationContext
     }
 
     /// <summary>停止引擎并把异常吞掉（退出路径上不允许因为卸载失败而卡住）。</summary>
+    /// <summary>
+    /// 若当前是「BSH 接管」，退出前把系统提示音还原成原样（按基线逐项还原，含 REG_EXPAND_SZ 类型与空槽结构）。
+    /// <para><b>为什么必须做</b>：接管清掉的那 18 个槽，语义是「改由 BSH 判断」；BSH 一退出就没人判断了，
+    /// 那些提示音会静默消失 —— 用户看到的现象是「提示音坏了」。所以退出即还原，开机自启再接管。</para>
+    /// <para>失败一律吞掉：退出路径上抛异常会留下半死不活的状态；真失败了还有「Windows 原样」可手动还原。</para>
+    /// </summary>
+    private static void RestoreIfTakeover()
+    {
+        try
+        {
+            if (!string.Equals(MonitorHost.ActiveProfileId, ProfileStore.TakeoverId, StringComparison.OrdinalIgnoreCase))
+                return;
+            var win = ProfileStore.Find(ProfileStore.WindowsDefaultId);
+            if (win is not null) ProfileStore.Apply(win);
+        }
+        catch
+        {
+            // 见方法注释：退出路径不抛
+        }
+    }
+
     private static void SafeStop()
     {
         try
@@ -250,6 +299,12 @@ public sealed class TrayContext : ApplicationContext
     {
         // 退出前必须卸载：钩子 / 隐藏窗口 / 定时器都是系统级资源，留着就是"看不见的常驻"
         SafeStop();
+
+        // 接管模式下必须把系统提示音还回去：那 18 个槽的含义是「BSH 在跑才由 BSH 判断响不响」，
+        // BSH 一退，系统就该恢复自己的行为 —— 否则用户会以为「提示音全坏了」。
+        // ⚠️ 必须在 SetActiveProfile(null) 之前判，否则读不到当前方案 id。
+        RestoreIfTakeover();
+
         MonitorHost.SetActiveProfile(null);
 
         _tray.Visible = false;

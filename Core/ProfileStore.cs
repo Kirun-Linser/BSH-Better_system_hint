@@ -40,6 +40,31 @@ public static class ProfileStore
     /// <summary>方案 <c>personal</c> 的 id。</summary>
     public const string PersonalId = "personal";
 
+    /// <summary>方案 <c>takeover</c> 的 id。</summary>
+    public const string TakeoverId = "takeover";
+
+    /// <summary>
+    /// 「BSH 接管」要清空的事件槽（写空串 ⇒ 系统不再播它）。
+    /// <para><b>第一组 10 个：引擎能替代的</b> —— 清掉系统槽后由监听规则补。这组是「系统提示音不够全面」的正解：
+    /// 系统只给一个笼统的 Open，而 BSH 能按具体程序区分（app 字段）。</para>
+    /// <para><b>第二组 8 个：界面类</b> —— 引擎感知不到（Maximize/Minimize 不是前台切换；
+    /// CCSelect/菜单是 UI 内部行为），但恰恰是「无操作时还响」的主力（后台程序也会触发它们）。
+    /// 用户选择「清掉」：宁可没声，也不要误响。</para>
+    /// <para><b>其余 21 个刻意保留</b>：崩溃 / UAC / 各通知 / 邮件 / 传真 / 主题 / 近场 / .Default ——
+    /// 引擎看不见它们，清了就等于永远失去这个提示。</para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> TakeoverSilenceSlots =
+    [
+        // ① 交给 BSH 的 10 个（进程启停 2 + 设备 3 + 会话 3 + 电池 2）
+        "Open", "Close",
+        "DeviceConnect", "DeviceDisconnect", "DeviceFail",
+        "WindowsLogon", "WindowsLogoff", "WindowsUnlock",
+        "LowBatteryAlarm", "CriticalBatteryAlarm",
+        // ② 界面类 8 个（感知不到，但易被后台程序误触发 ⇒ 清掉）
+        "Maximize", "Minimize", "RestoreUp", "RestoreDown",
+        "CCSelect", "MenuCommand", "MenuPopup", "ShowBand",
+    ];
+
     /// <summary>
     /// 个性化方案的开关文件路径：<c>&lt;工程根&gt;\profiles\personal\profile.json</c>。
     /// <para>里面的 <c>applyVoiceScheme</c> / <c>skipFreq</c> / <c>skipEvents</c> 决定「个性化设置」改不改注册表、改哪些槽。</para>
@@ -81,6 +106,15 @@ public static class ProfileStore
             + "成功后再按 profiles\\personal\\rules.json 里启用的规则安装监听器，命中时播放个性化提示音。",
             ProfileKind.Monitor,
             RuleStore.DefaultPath),
+
+        new SoundProfile(
+            TakeoverId,
+            "BSH 接管",
+            "把 18 个系统声音事件槽清空（系统不再自己响），改由 BSH 的监听规则按程序判断；"
+            + "崩溃 / UAC / 各类通知等 21 个槽保持系统原样。"
+            + "⚠️ BSH 没在运行时，这些被清掉的提示音就是没有 —— 退出 BSH 会自动还原成系统提示音。",
+            ProfileKind.Takeover,
+            RuleStore.DefaultPath),
     ];
 
     /// <summary>按 id 找方案（忽略大小写）；找不到返回 <c>null</c>。</summary>
@@ -117,6 +151,14 @@ public static class ProfileStore
                 int missing = scheme.MissingFiles().Count;
                 // 一条能落地的都没有 = 不可用（避免"点了确认但什么都没发生"）
                 return (usable > 0, $"语音方案 {usable} 项、缺失 {missing} 项");
+            }
+
+            case ProfileKind.Takeover:
+            {
+                // 报清楚：会清空几个、其中几个交给引擎、再报规则条数
+                int n = TakeoverSilenceSlots.Count;
+                int rules = EnabledRuleCount();
+                return (true, $"清空 {n} 个槽（10 个改由 BSH 规则判断 + 8 个界面音关掉）；启用规则 {rules} 条");
             }
 
             case ProfileKind.Monitor:
@@ -209,12 +251,31 @@ public static class ProfileStore
         ProfileKind.RestoreBaseline => PlanRestoreBaseline(p),
         ProfileKind.VoiceScheme => PlanVoiceScheme(p.Source, LoadPersonalConfig(out _), ReadVoiceFreqs(out _).Freqs, Array.Empty<string>()),
         ProfileKind.Monitor => PlanPersonal(p),
+        ProfileKind.Takeover => PlanTakeover(p),
         _ => new ProfilePlan([], [], [], [], 0, 0),
     };
 
     /// <summary>
     /// 「Windows 原样」的预演：逐槽与现场比对，列出<b>真正要改</b>的那些（已经是原样的不重复写）。
     /// </summary>
+    /// <summary>
+    /// 「BSH 接管」的只读预演：列出要清空的槽，再报会启用哪几类监听器。
+    /// <para>不判断"现场是否已经是空的" —— 写空串是幂等的，预演宁多勿少（与 Apply 的实际动作一致）。</para>
+    /// </summary>
+    private static ProfilePlan PlanTakeover(SoundProfile p)
+    {
+        var lines = new List<string>();
+        var writes = new List<(string Event, string Wav)>();
+        foreach (var evt in TakeoverSilenceSlots)
+        {
+            writes.Add((evt, ""));
+            lines.Add($"{evt}  →  （清空：改由 BSH 判断）");
+        }
+        var kinds = EnabledMonitorKinds();
+        lines.Add($"启用监听：{EnabledRuleCount()} 条规则，覆盖 {kinds.Count} 类");
+        return new ProfilePlan(lines, [.. writes.Select(x => x.Event)], writes, [], 0, kinds.Count);
+    }
+
     private static ProfilePlan PlanRestoreBaseline(SoundProfile p)
     {
         var lines = new List<string>();
@@ -445,6 +506,22 @@ public static class ProfileStore
                     throw new PartialApplyException(
                         $"「{p.Name}」已写入 {slots} 个事件槽，但监听引擎启动失败：{ex.Message}", ex);
                 }
+            }
+
+            case ProfileKind.Takeover:
+            {
+                // 与 Monitor 同一顺序约定：先写注册表（清槽），成功后再启引擎。
+                // 中断时最坏留下「系统不响、BSH 也没监听」——那是安静的，而不是「引擎在跑但槽还没清」。
+                int cleared = 0;
+                foreach (var evt in TakeoverSilenceSlots)
+                {
+                    SoundScheme.SetSound(evt, "");
+                    cleared++;
+                }
+
+                int started = MonitorHost.StartFromRules();
+                MonitorHost.SetActiveProfile(p.Id);
+                return new ApplyResult(p.Id, started, cleared, SlotsWritten: true, EngineStarted: true);
             }
 
             default:

@@ -215,9 +215,13 @@ public sealed class MainForm : Form
         // 一律不进 ToolTip —— 那属于实现，写在 README 与 profile.json 里，不该让用户悬停才看懂。
         var btnDefault = MakeButton("Windows 原样", () => ApplyProfile(ProfileStore.WindowsDefaultId));
         var btnPersonal = MakeButton("个性化设置", () => ApplyProfile(ProfileStore.PersonalId));
+        // 「BSH 接管」：清掉 18 个槽（10 个交给规则判断 + 8 个界面音关掉），其余 21 个保持系统原样。
+        // 它排在两套方案之后：前面是「换音」，这个是「不换音、改由 BSH 决定响不响」。
+        var btnTakeover = MakeButton("BSH 接管", () => ApplyProfile(ProfileStore.TakeoverId));
 
         buttons.Controls.Add(btnDefault);
         buttons.Controls.Add(btnPersonal);
+        buttons.Controls.Add(btnTakeover);
 
         // ── 预设：一个下拉 + 一个按钮 ──
         // 预设 = 一套「事件 → 音频」映射（+ 可选规则集）。与上面两套方案并列：三者都是"一键换整套"。
