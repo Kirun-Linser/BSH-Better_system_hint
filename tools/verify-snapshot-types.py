@@ -29,7 +29,7 @@ import tempfile
 import winreg
 from pathlib import Path
 
-ROOT = Path(r"D:\O级项目管理\BSH")
+ROOT = Path(__file__).resolve().parent.parent
 DLL = ROOT / "bin" / "Release" / "net10.0-windows" / "BSH.dll"
 DOTNET = str(Path.home() / ".dotnet" / "dotnet.exe")     # SDK 10 是用户级安装，PATH 里那个只有 8.0.29
 DOTNET_ROOT = str(Path.home() / ".dotnet")

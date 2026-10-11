@@ -12,7 +12,7 @@
   down  `Execution.` + 后处理降调 ~6Hz + 低通 4kHz（沉、终结感）
 
 用法：python make-execution-variants.py
-输出：D:\\O级项目管理\\BSH\\voice\\execution\\
+输出：voice/execution/（相对仓库根）
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ from pathlib import Path
 
 import numpy as np
 
-TOOLS = Path(r"D:\O级项目管理\BSH\tools")
-OUT = Path(r"D:\O级项目管理\BSH\voice\execution")
+TOOLS = Path(__file__).resolve().parent
+OUT = Path(__file__).resolve().parent.parent / "voice" / "execution"
 FFMPEG = str(Path.home() / ".dsh" / "plugins" / "dsh-music-code-mv" / "node_modules"
               / "@ffmpeg-installer" / "win32-x64" / "ffmpeg.exe")
 

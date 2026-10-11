@@ -35,7 +35,7 @@ import math
 
 import numpy as np
 
-ROOT = Path(r"D:\O级项目管理\BSH")
+ROOT = Path(__file__).resolve().parent.parent
 LINES = ROOT / "voice" / "lines.json"
 WORK = ROOT / "voice" / "edge-batch"
 ARIA_DIR = WORK / "aria"

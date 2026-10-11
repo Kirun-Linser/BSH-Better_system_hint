@@ -13,7 +13,7 @@
 对照组 00 = 当前生产版本（D 版 EQ 塑形，pitch −10Hz，无倾斜）。
 
 用法：python make-soft-variants.py [事件名...]   默认 SystemExclamation / AppGPFault
-输出：D:\\O级项目管理\\BSH\\voice\\soft\\
+输出：voice/soft/（相对仓库根）
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from pathlib import Path
 
 import numpy as np
 
-TOOLS = Path(r"D:\O级项目管理\BSH\tools")
-OUT = Path(r"D:\O级项目管理\BSH\voice\soft")
+TOOLS = Path(__file__).resolve().parent
+OUT = Path(__file__).resolve().parent.parent / "voice" / "soft"
 
 spec = importlib.util.spec_from_file_location("meb", TOOLS / "make-edge-batch.py")
 meb = importlib.util.module_from_spec(spec)

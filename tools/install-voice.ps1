@@ -2,7 +2,7 @@
 #
 # 读 voice\lines.json，把 voice\out\*.wav 按「中文,英文.wav」命名复制到：
 #   1) %LOCALAPPDATA%\BSH\sounds\        ← 系统实际读取的位置（注册表指向这里）
-#   2) -MirrorDir（可选）                ← 人类可读的镜像目录（如桌面 BSHsd）
+#   2) -MirrorDir（可选）                ← 人类可读的镜像目录（如桌面某个目录）
 # 并生成 voice-scheme.json（事件名 → wav 绝对路径）。
 #
 # ⚠️ 为什么不放工作目录：AGENTS.md 第六节 —— 会话工作目录受 ACL 沙箱约束时，

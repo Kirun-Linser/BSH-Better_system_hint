@@ -15,7 +15,7 @@
 ⇒ 得到"Michelle 的嗓音 + 35% 的 Aria 频谱色彩"，且全程只有一个声源。
 
 用法：python make-eva-eq.py [事件名...]   默认 SystemExclamation / DeviceConnect
-输出：D:\\O级项目管理\\BSH\\voice\\compare\\
+输出：voice/compare/（相对仓库根）
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from pathlib import Path
 
 import numpy as np
 
-TOOLS = Path(r"D:\O级项目管理\BSH\tools")
-OUT = Path(r"D:\O级项目管理\BSH\voice\compare")
+TOOLS = Path(__file__).resolve().parent
+OUT = Path(__file__).resolve().parent.parent / "voice" / "compare"
 
 spec = importlib.util.spec_from_file_location("meb", TOOLS / "make-edge-batch.py")
 meb = importlib.util.module_from_spec(spec)

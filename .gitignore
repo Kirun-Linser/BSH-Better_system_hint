@@ -44,3 +44,20 @@ profiles/personal/rules.json
 tools/remix-one.py
 tools/split-join-readying.py
 tools/join-ready-plus-reaning-ing.py
+
+# ── 已否决 / 一次性的实验脚本：保留在本地备查，不入公开库 ──
+tools/compare-mix.py
+tools/diag-click.py
+tools/inspect-industrial.py
+tools/make-eva-voice.py
+tools/make-industrial-soft.py
+tools/make-industrial-v2.py
+tools/make-industrial.py
+tools/make-ra-alert.py
+tools/make-ra-sound.py
+tools/make-voice.ps1
+tools/robotize-industrial.py
+tools/robotize-variants.py
+tools/robotize.py
+tools/verify-industrial-lib.py
+tools/verify-industrial.py

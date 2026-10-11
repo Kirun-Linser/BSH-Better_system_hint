@@ -71,7 +71,7 @@ BSH 给两条互不冲突的路：
 ### 2.1 构建
 
 ```powershell
-cd D:\O级项目管理\BSH
+cd <你 clone 下来的仓库根目录>
 & "$env:USERPROFILE\.dotnet\dotnet.exe" build BSH.csproj -c Release
 ```
 

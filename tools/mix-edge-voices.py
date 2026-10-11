@@ -11,7 +11,7 @@
   · 幅度谱按权重融合 → 频谱包络是两者的加权平均，即"音色"被混合
 这样得到的是**单一音色**，而不是两个声音的叠加。
 
-输出：D:\\O级项目管理\\BSH\\voice\\edge-mix\\（50/50、65/35 偏 Aria、35/65 偏 Michelle）
+输出：voice/edge-mix/（相对仓库根）（50/50、65/35 偏 Aria、35/65 偏 Michelle）
 
 用法：python mix-edge-voices.py
 """
@@ -25,8 +25,8 @@ from pathlib import Path
 
 import numpy as np
 
-SRC = Path(r"D:\O级项目管理\BSH\voice\edge-tts")
-OUT = Path(r"D:\O级项目管理\BSH\voice\edge-mix")
+SRC = Path(__file__).resolve().parent.parent / "voice" / "edge-tts"
+OUT = Path(__file__).resolve().parent.parent / "voice" / "edge-mix"
 FFT = 1024
 HOP = 256
 WEIGHTS = {"Mix-50-50": 0.50, "Mix-65A-35D": 0.65, "Mix-35A-65D": 0.35}

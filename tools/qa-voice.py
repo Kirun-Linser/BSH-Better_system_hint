@@ -7,10 +7,11 @@
 import glob
 import os
 import wave
+from pathlib import Path
 
 import numpy as np
 
-OUT = r"D:\O级项目管理\BSH\voice\out"
+OUT = str(Path(__file__).resolve().parent.parent / "voice" / "out")
 
 
 def stat(path: str):

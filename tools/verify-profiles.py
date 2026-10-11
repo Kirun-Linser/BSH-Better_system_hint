@@ -22,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(r"D:\O级项目管理\BSH")
+ROOT = Path(__file__).resolve().parent.parent
 EXE = ROOT / "bin" / "Release" / "net10.0-windows" / "BSH.exe"
 DLL = ROOT / "bin" / "Release" / "net10.0-windows" / "BSH.dll"
 DOTNET = str(Path.home() / ".dotnet" / "dotnet.exe")          # SDK 10 是用户级安装；PATH 里的 dotnet 只有 8.0.29
@@ -146,7 +146,7 @@ def check_static() -> dict:
     if not DLL.exists():
         problems.append(f"找不到编译产物：{DLL}（先 build）")
         return {}
-    rpt = Path(r"D:\O级项目管理\BSH\verify-profiles-report.json")
+    rpt = Path(__file__).resolve().parent.parent / "verify-profiles-report.json"
     run_bsh(["--report", str(rpt)], timeout=120)
     if not rpt.exists():
         problems.append("--report 未生成报告")
@@ -179,7 +179,7 @@ def check_live(report: dict) -> None:
     h_before = reg_hash(before)
     print(f"  起始：{len(before)} 槽，哈希 {h_before}")
 
-    snap = Path(r"D:\O级项目管理\BSH\verify-profiles-snapshot.json")
+    snap = Path(__file__).resolve().parent.parent / "verify-profiles-snapshot.json"
 
     def run_profile(pid: str, label: str) -> dict[str, str]:
         """应用一个方案，返回应用后的注册表状态。"""
