@@ -3,7 +3,7 @@
 用户 2026-10-11 要求：
   · 除「循环电话」与「循环来电」之外的全部事件都要
   · 音色用**机械女声**
-  · 只输出到 C:\\Users\\Linser\\Desktop\\BSH-yushe（**不碰系统目录、不碰注册表**）
+  · 只输出到 OUT_DIR（**不碰系统目录、不碰注册表**）
 
 机械音配方沿用 tools/robotize.py（也是 Close 那条用的那套）：
   biquad 高通 300Hz → 低通 3500Hz（电话频带，掐掉低频厚度与高频齿音）
@@ -21,15 +21,19 @@ import asyncio
 import importlib.util
 import subprocess
 import sys
+import os
 from pathlib import Path
+
+# 输出目录：可移植写法，可用环境变量覆盖（默认桌面 BSH-yushe）
+OUT_DIR = Path(os.environ.get("BSH_MECH_OUT", str(Path.home() / "Desktop" / "BSH-yushe")))
 
 import numpy as np
 
 TOOLS = Path(r"D:\O级项目管理\BSH\tools")
 EB = Path(r"D:\O级项目管理\BSH\voice\edge-batch")
-OUT = Path(r"C:\Users\Linser\Desktop\BSH-yushe")
-FFMPEG = r"C:\Users\11\.dsh\plugins\dsh-music-code-mv\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe"
-TMP = Path(r"C:\Users\11\.dsh\tmp\bsh-mech")
+OUT = OUT_DIR
+FFMPEG = str(Path.home() / ".dsh" / "plugins" / "dsh-music-code-mv" / "node_modules" / "@ffmpeg-installer" / "win32-x64" / "ffmpeg.exe")
+TMP = Path.home() / ".dsh" / "tmp" / "bsh-mech"
 
 # 排除：循环铃声 / 循环来电（用户明确点名不要）
 EXCLUDE_PREFIXES = ("Notification.Looping.",)
