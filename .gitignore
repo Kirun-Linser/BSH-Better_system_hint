@@ -61,3 +61,7 @@ tools/robotize-variants.py
 tools/robotize.py
 tools/verify-industrial-lib.py
 tools/verify-industrial.py
+
+# ── 预设自带音频：一律不入库（体积大 + 音源授权）────────────────
+# 预设只入库 preset.json（映射与元数据），音频按预设隔离存放在各自的 sounds/ 下
+profiles/presets/*/sounds/*.wav
