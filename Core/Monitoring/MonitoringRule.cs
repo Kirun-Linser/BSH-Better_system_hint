@@ -66,7 +66,7 @@ public sealed class MonitorRule
     /// <item><description><see cref="MonitorEventKind.DeviceChange"/>：<c>Arrival</c> / <c>Remove</c>。</description></item>
     /// <item><description><see cref="MonitorEventKind.PowerSession"/>：<c>AC,DC,Lock,Unlock,Suspend,Resume</c>（另有 <c>BatteryLow</c> / <c>Logon</c> / <c>Logoff</c>）。</description></item>
     /// <item><description><see cref="MonitorEventKind.Clipboard"/>：<c>Text,Image,Files</c>。</description></item>
-    /// <item><description><see cref="MonitorEventKind.FileSystem"/>：目录路径，如 <c>C:\Users\11\Downloads</c>。</description></item>
+    /// <item><description><see cref="MonitorEventKind.FileSystem"/>：目录路径，如 <c>C:\Users\<用户名>\Downloads</c>。</description></item>
     /// </list>
     /// </summary>
     public string? Match { get; set; }

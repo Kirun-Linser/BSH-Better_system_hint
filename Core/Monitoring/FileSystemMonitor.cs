@@ -7,7 +7,7 @@ namespace BSH.Core.Monitoring;
 /// 引擎在 <c>Start</c> 之前用 <see cref="SetRoots"/> 把目录集合灌进来。
 /// </para>
 /// <para>
-/// 事件明细是<b>被变更项的完整路径</b>，前面带变更类型，形如 <c>Created C:\Users\11\Downloads\a.txt</c>；
+/// 事件明细是<b>被变更项的完整路径</b>，前面带变更类型，形如 <c>Created C:\Users\<用户名>\Downloads\a.txt</c>；
 /// 规则写目录路径即可命中该目录下的所有变化（见 <see cref="MonitorMatcher"/>）。
 /// </para>
 /// <para><c>IncludeSubdirectories</c> 固定为 <c>false</c>：只盯这一层，避免监视 <c>%TEMP%</c> 这类目录时被整棵子树的噪声淹没。</para>

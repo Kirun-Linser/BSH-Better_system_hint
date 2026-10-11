@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(r"D:\O级项目管理\BSH")
 EXE = ROOT / "bin" / "Release" / "net10.0-windows" / "BSH.exe"
 DLL = ROOT / "bin" / "Release" / "net10.0-windows" / "BSH.dll"
-DOTNET = r"C:\Users\11\.dotnet\dotnet.exe"          # SDK 10 是用户级安装；PATH 里的 dotnet 只有 8.0.29
+DOTNET = str(Path.home() / ".dotnet" / "dotnet.exe")          # SDK 10 是用户级安装；PATH 里的 dotnet 只有 8.0.29
 BASE_KEY = r"AppEvents\Schemes\Apps\.Default"
 
 problems: list[str] = []
@@ -40,7 +40,7 @@ def run_bsh(args: list[str], timeout: int = 180) -> subprocess.CompletedProcess:
     `C:\\Program Files\\dotnet`（只有 8.0.29），而本工程是 net10.0-windows。
     正确做法：用用户级 SDK 的 dotnet 跑 dll，并设 DOTNET_ROOT。
     """
-    env = {**os.environ, "DOTNET_ROOT": r"C:\Users\11\.dotnet"}
+    env = {**os.environ, "DOTNET_ROOT": str(Path.home() / ".dotnet")}
     # encoding 必须显式给 utf-8：BSH 的输出含中文快照路径，而默认 text=True 会按 locale
     # （本机 cp936/GBK）解码 → 读线程抛 UnicodeDecodeError、r.stdout 变成 None。
     # 2026-10-10 实测栽过这一次（子 agent 提醒过，我当时没采纳）。

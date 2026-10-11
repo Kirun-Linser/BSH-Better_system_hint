@@ -28,7 +28,8 @@ import numpy as np
 
 TOOLS = Path(r"D:\O级项目管理\BSH\tools")
 OUT = Path(r"D:\O级项目管理\BSH\voice\execution")
-FFMPEG = r"C:\Users\11\.dsh\plugins\dsh-music-code-mv\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe"
+FFMPEG = str(Path.home() / ".dsh" / "plugins" / "dsh-music-code-mv" / "node_modules"
+              / "@ffmpeg-installer" / "win32-x64" / "ffmpeg.exe")
 
 spec = importlib.util.spec_from_file_location("meb", TOOLS / "make-edge-batch.py")
 meb = importlib.util.module_from_spec(spec)

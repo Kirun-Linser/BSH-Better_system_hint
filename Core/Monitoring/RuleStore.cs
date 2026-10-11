@@ -133,6 +133,6 @@ public static class RuleStore
         new() { Id = "usb", Name = "U 盘插拔", Kind = MonitorEventKind.DeviceChange, Match = "Arrival,Remove", SpeakKey = "DeviceConnect", CooldownMs = 500 },
         new() { Id = "power", Name = "插拔电源 / 锁屏", Kind = MonitorEventKind.PowerSession, Match = "AC,DC,Lock,Unlock", SpeakKey = "SystemHand" },
         new() { Id = "clip", Name = "复制文本", Kind = MonitorEventKind.Clipboard, Match = "Text", CooldownMs = 1000 },
-        new() { Id = "downloads", Name = "下载目录有变化", Kind = MonitorEventKind.FileSystem, Match = @"C:\Users\11\Downloads", CooldownMs = 500 },
+        new() { Id = "downloads", Name = "下载目录有变化", Kind = MonitorEventKind.FileSystem, Match = @"C:\Users\<你的用户名>\Downloads", CooldownMs = 500 },
     ];
 }

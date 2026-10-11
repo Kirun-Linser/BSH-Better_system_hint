@@ -41,7 +41,8 @@ WORK = ROOT / "voice" / "edge-batch"
 ARIA_DIR = WORK / "aria"
 MICH_DIR = WORK / "michelle"
 OUT_DIR = WORK / "out"
-FFMPEG = r"C:\Users\11\.dsh\plugins\dsh-music-code-mv\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe"
+FFMPEG = str(Path.home() / ".dsh" / "plugins" / "dsh-music-code-mv" / "node_modules"
+              / "@ffmpeg-installer" / "win32-x64" / "ffmpeg.exe")
 
 # ⚠️ 必须与 Windows 音频引擎对齐：系统自带音效实测为 48000Hz/16bit/2ch。
 # 之前用 22050Hz/1ch，Windows 每次播放都要重采样+上混 ⇒ 用户实测「打开和关闭时延迟很高」。

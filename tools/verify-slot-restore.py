@@ -45,8 +45,8 @@ except Exception:                                   # noqa: BLE001 - 老环境�
 
 ROOT = Path(r"D:\O级项目管理\BSH")
 DLL = ROOT / "bin" / "Release" / "net10.0-windows" / "BSH.dll"
-DOTNET = r"C:\Users\11\.dotnet\dotnet.exe"      # SDK 10 是用户级安装，PATH 里那个只有 8.0.29
-DOTNET_ROOT = r"C:\Users\11\.dotnet"
+DOTNET = str(Path.home() / ".dotnet" / "dotnet.exe")      # SDK 10 是用户级安装，PATH 里那个只有 8.0.29
+DOTNET_ROOT = str(Path.home() / ".dotnet")
 BASE_KEY = r"AppEvents\Schemes\Apps\.Default"
 
 # ★ 只读命令白名单：脚本只允许调这两个参数，任何写路径都不在射程内

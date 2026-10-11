@@ -31,8 +31,8 @@ from pathlib import Path
 
 ROOT = Path(r"D:\O级项目管理\BSH")
 DLL = ROOT / "bin" / "Release" / "net10.0-windows" / "BSH.dll"
-DOTNET = r"C:\Users\11\.dotnet\dotnet.exe"     # SDK 10 是用户级安装，PATH 里那个只有 8.0.29
-DOTNET_ROOT = r"C:\Users\11\.dotnet"
+DOTNET = str(Path.home() / ".dotnet" / "dotnet.exe")     # SDK 10 是用户级安装，PATH 里那个只有 8.0.29
+DOTNET_ROOT = str(Path.home() / ".dotnet")
 BASE_KEY = r"AppEvents\Schemes\Apps\.Default"
 
 # 文档记录的 Windows 原样分布（用于给出"是否偏离"的提示，不作为唯一判据）

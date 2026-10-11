@@ -10,11 +10,11 @@
 #
 # 用法：
 #   pwsh -File tools\install-voice.ps1
-#   pwsh -File tools\install-voice.ps1 -MirrorDir 'C:\Users\11\Desktop\BSHtext111\BSHsd' -Clean
+#   pwsh -File tools\install-voice.ps1 -MirrorDir "$env:USERPROFILE\Desktop\BSH-voice" -Clean
 
 param(
-    [string]$OutDir    = 'D:\O级项目管理\BSH\voice\out',
-    [string]$LinesJson = 'D:\O级项目管理\BSH\voice\lines.json',
+    [string]$OutDir    = '',   # 默认取脚本旁 ../voice/edge-batch/out（见下方补默认值）
+    [string]$LinesJson = '',
     [string]$TargetDir = (Join-Path $env:LOCALAPPDATA 'BSH\sounds'),
     [string]$MirrorDir = '',
     [switch]$Clean,          # 清空目标目录里旧的 .wav 再复制
@@ -22,6 +22,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# 默认路径相对脚本自身定位：换台机器 / 换目录都不用改脚本
+if ($OutDir    -eq '') { $OutDir    = Join-Path $PSScriptRoot '../voice/edge-batch/out' }
+if ($LinesJson -eq '') { $LinesJson = Join-Path $PSScriptRoot '../voice/lines.json' }
 
 if (-not (Test-Path $OutDir))    { Write-Host "找不到语音目录：$OutDir"; exit 1 }
 if (-not (Test-Path $LinesJson)) { Write-Host "找不到清单文件：$LinesJson"; exit 1 }
@@ -67,8 +71,8 @@ foreach ($r in $rows) {
 
 $scheme = [pscustomobject]@{
     generatedAt = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-    note        = 'BSH 机械女声语音方案（采用版）：事件 → wav 绝对路径'
-    voice       = 'Microsoft Zira Desktop (Rate +3) + 自写 DSP（tools/robotize.py）'
+    note        = 'BSH 语音方案（采用版）：事件 → wav 绝对路径'
+    voice       = 'Edge TTS Michelle(-10Hz) + Aria(+0Hz) → EQ 塑形（Michelle 底 + 35% Aria 谱形）→ V3 轻柔（升 6Hz + 频谱倾斜）'
     naming      = '中文,英文.wav'
     sounds      = $map
 }
