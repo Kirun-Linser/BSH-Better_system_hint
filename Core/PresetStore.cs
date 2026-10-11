@@ -38,7 +38,7 @@ public sealed class Preset
 /// </para>
 /// <para>
 /// <b>音频路径解析规则</b>（<c>sounds</c> 的值）：
-/// ① 纯文件名（<c>xxx.wav</c>）→ 在 <c>%LOCALAPPDATA%\BSH\sounds\</c> 下找（现有那 39 条的存放处）；
+/// ① 纯文件名（<c>xxx.wav</c>）→ 在 <c>%LOCALAPPDATA%/BSH/sounds/</c> 下找（现有那 39 条的存放处）；
 /// ② 以 <c>sounds/</c> 开头 → 相对<b>预设目录</b>找（预设自带音频时用）；
 /// ③ 其它 → 当绝对路径用。
 /// 这样内置预设可以「只带映射、复用装机音频」，而第三方预设可以「自带音频、整包分发」。
@@ -54,7 +54,7 @@ public static class PresetStore
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BSH", "sounds");
 
     /// <summary>
-    /// 预设自带音频的存放根目录：<c>%LOCALAPPDATA%\BSH\presets\&lt;id&gt;\sounds\</c>。
+    /// 预设自带音频的存放根目录：<c>%LOCALAPPDATA%/BSH/presets/&lt;id&gt;/sounds/</c>。
     /// <para>⚠️ <b>为什么不放仓库里的 <c>profiles/presets/&lt;id&gt;/sounds/</c></b>：那是<b>会话工作目录</b>，
     /// 受 ACL 沙箱约束时以用户身份运行的程序（含系统音频链路）可能读不到 —— 这正是
     /// <c>tools\install-voice.ps1</c> 把音频装到 <c>%LOCALAPPDATA%</c> 的同一条理由。
@@ -205,6 +205,124 @@ public static class PresetStore
 
         var allSkipped = skippedByUser.Concat(missing).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
         return new PresetApplyResult(todo.Count, skippedByUser.Count, missing.Count, allSkipped, missing, snapshotPath);
+    }
+
+    // ───────────────────────────── 用户可增删改（内置预设只读） ─────────────────────────────
+
+    /// <summary>
+    /// 新建一个<b>空预设</b>（只有名字，<c>sounds</c>/<c>rules</c> 都空）—— 用户以后往里填。
+    /// <para>默认名由调用方给（界面上是「个性化设置」）；id 与名字无关，用序号自动生成，避免中文/空格当目录名。</para>
+    /// </summary>
+    /// <param name="name">预设显示名。</param>
+    /// <param name="problem">失败原因。</param>
+    /// <returns>新预设 id；失败返回 <c>null</c>。</returns>
+    public static string? Create(string name, out string? problem)
+    {
+        problem = null;
+        var clean = (name ?? "").Trim();
+        if (clean.Length == 0) { problem = "名字不能为空"; return null; }
+
+        try
+        {
+            Directory.CreateDirectory(PresetsDir);
+            // 找一个没被占用的序号 id
+            string id;
+            int i = 1;
+            do { id = $"my-{i++}"; } while (Directory.Exists(Path.Combine(PresetsDir, id)));
+
+            var dir = Path.Combine(PresetsDir, id);
+            Directory.CreateDirectory(dir);
+            Directory.CreateDirectory(Path.Combine(dir, "sounds"));
+
+            var preset = new Dictionary<string, object?>
+            {
+                ["id"] = id,
+                ["name"] = clean,
+                ["description"] = "用户自建预设（空壳，尚未填入声音映射）",
+                ["builtin"] = false,
+                ["note"] = "sounds 为空 = 应用它不会改任何槽。要往里加声音，可把 %LOCALAPPDATA%/BSH/presets//"
+                           + id + "/sounds/ 下的文件名按「事件名 -> 文件名」写进 sounds；"
+                           + "也可以用「替换音效…」改好系统槽后，用 --capture-preset 捕获（未实现）。",
+                ["sounds"] = new Dictionary<string, string>(),
+                ["rules"] = Array.Empty<object>(),
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(preset,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(Path.Combine(dir, "preset.json"), json);
+            return id;
+        }
+        catch (Exception ex)
+        {
+            problem = $"{ex.GetType().Name} {ex.Message}";
+            return null;
+        }
+    }
+
+    /// <summary>改预设的显示名（内置预设也允许改：改的只是本地这份 json 的 name 字段）。</summary>
+    /// <param name="id">预设 id。</param>
+    /// <param name="newName">新名字。</param>
+    /// <param name="problem">失败原因。</param>
+    public static bool Rename(string id, string newName, out string? problem)
+    {
+        problem = null;
+        var clean = (newName ?? "").Trim();
+        if (clean.Length == 0) { problem = "名字不能为空"; return false; }
+
+        var file = Path.Combine(PresetsDir, id, "preset.json");
+        if (!File.Exists(file)) { problem = $"找不到预设：{id}"; return false; }
+
+        try
+        {
+            var text = File.ReadAllText(file);
+            using var doc = JsonDocument.Parse(text, DocOpts);
+            var dict = new Dictionary<string, JsonElement>();
+            foreach (var p in doc.RootElement.EnumerateObject()) dict[p.Name] = p.Value;
+
+            var outDict = new Dictionary<string, object?>();
+            bool replaced = false;
+            foreach (var kv in dict)
+            {
+                if (kv.Key.Equals("name", StringComparison.OrdinalIgnoreCase)) { outDict[kv.Key] = clean; replaced = true; }
+                else outDict[kv.Key] = kv.Value;
+            }
+            if (!replaced) outDict["name"] = clean;
+
+            File.WriteAllText(file, JsonSerializer.Serialize(outDict,
+                new JsonSerializerOptions { WriteIndented = true }));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            problem = $"{ex.GetType().Name} {ex.Message}";
+            return false;
+        }
+    }
+
+    /// <summary>删除一个<b>用户自建</b>预设（含它的 sounds 目录）。内置预设拒绝删除。</summary>
+    /// <param name="id">预设 id。</param>
+    /// <param name="problem">失败原因。</param>
+    public static bool Delete(string id, out string? problem)
+    {
+        problem = null;
+        var info = List().FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (info is null) { problem = $"找不到预设：{id}"; return false; }
+        if (info.Builtin) { problem = "内置预设不能删除（那是软件自带的那套）"; return false; }
+
+        try
+        {
+            var dir = Path.Combine(PresetsDir, id);
+            Directory.Delete(dir, recursive: true);
+
+            // 装机目录里那份音频也一并清掉（那是应用时复制/生成的，留着没人用）
+            var audio = PresetAudioDir(id);
+            if (Directory.Exists(audio)) Directory.Delete(audio, recursive: true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            problem = $"{ex.GetType().Name} {ex.Message}";
+            return false;
+        }
     }
 
     /// <summary>把 <c>sounds</c> 里的值解析成绝对路径（规则见类文档）。</summary>

@@ -1,6 +1,6 @@
 {
   "id": "eva-mech",
-  "name": "EVA 机械女声",
+  "name": "BSH EVA",
   "description": "Edge TTS（Michelle + Aria 谱形）+ V3 轻柔后处理；39 个事件槽全配语音。",
   "produce": {
     "how": "本预设是「Edge TTS 合成 + 后处理」的产物，需要联网",

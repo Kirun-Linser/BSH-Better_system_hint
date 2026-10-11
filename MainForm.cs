@@ -231,6 +231,8 @@ public sealed class MainForm : Form
         _presetBox.DisplayMember = nameof(PresetInfo.Name);
         buttons.Controls.Add(_presetBox);
         buttons.Controls.Add(MakeButton("应用预设…", ApplySelectedPreset));
+        buttons.Controls.Add(MakeButton("新建预设…", CreatePreset));
+        buttons.Controls.Add(MakeButton("预设改名…", RenamePreset));
         buttons.Controls.Add(MakeButton("应用提示音…", OpenAppSoundForm));
 
         buttons.Controls.Add(MakeButton("▶ 试听", Preview));
@@ -834,6 +836,46 @@ public sealed class MainForm : Form
     }
 
     public void ApplyVoiceScheme() => ApplyProfile(ProfileStore.PersonalId);
+
+    /// <summary>
+    /// 新建预设（空壳，默认名「个性化设置」）。用户以后往里填声音映射。
+    /// <para>默认名是刻意的：用户说自己要一份「个性化设置」当起点。</para>
+    /// </summary>
+    private void CreatePreset()
+    {
+        using var dlg = new PresetNameDialog("新建预设", "给新预设起个名字（默认「个性化设置」）：", "个性化设置");
+        if (dlg.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dlg.Value)) return;
+
+        var id = PresetStore.Create(dlg.Value!, out var problem);
+        if (id is null)
+        {
+            MessageBox.Show(this, $"新建失败：{problem}", "新建预设", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        RefreshPresets();
+        _hint.Text = $"已新建预设「{dlg.Value}」—— 它是空壳，声音映射要自己填（见它的 preset.json 里 note）。";
+    }
+
+    /// <summary>改当前选中预设的显示名（内置预设也允许改，改的是本地这份 json 的 name 字段）。</summary>
+    private void RenamePreset()
+    {
+        if (_presetBox.SelectedItem is not PresetInfo info)
+        {
+            MessageBox.Show(this, "先在右边选一个预设。", "预设改名", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dlg = new PresetNameDialog("预设改名", $"把「{info.Name}」改成：", info.Name);
+        if (dlg.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dlg.Value)) return;
+
+        if (!PresetStore.Rename(info.Id, dlg.Value!, out var problem))
+        {
+            MessageBox.Show(this, $"改名失败：{problem}", "预设改名", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        RefreshPresets();
+        _hint.Text = $"预设已改名为「{dlg.Value}」。";
+    }
 
     /// <summary>
     /// 刷新预设下拉。没发现预设时按钮变灰并给一行说明，而不是抛异常（与 PresetStore 的容错口径一致）。

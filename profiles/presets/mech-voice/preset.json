@@ -1,6 +1,6 @@
 {
   "id": "mech-voice",
-  "name": "机械女声",
+  "name": "BSH",
   "description": "robotize 配方：电话带通 300–3500Hz + 40Hz 环形调制 + 12bit 量化（比 Close 略柔）。",
   "produce": {
     "how": "跑到 BSH 仓库根执行：python tools/make-mech-voice.py（可用环境变量 BSH_MECH_OUT 指定输出目录）",
