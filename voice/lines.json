@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-10-11",
   "rev": 3,
-  "note": "rev3：按触发频率重设计播报长度（F5 极高频 1 词 → F1 极罕见 6-8 词；F0 循环 1-2 词）。用户 2026-10-11 亲手改写 7 组。Open 与 Close 共用同一单词 Execution，靠语气区分（见 tools/make-edge-batch.py 的 finalize / TONE_OVERRIDE）。",
+  "note": "rev3：按触发频率重设计播报长度（F5 极高频 1 词 → F1 极罕见 6-8 词；F0 循环 1-2 词）。用户 2026-10-11 亲手改写 7 组。另：RestoreUp 与 Maximize 刻意同音（用户 2026-10-11 定）—— 从任务栏恢复一个最大化窗口，Windows 认定的事件是 RestoreUp 而非 Maximize，但听感上都是「变大」，故复用 Readiness。Open 与 Close 共用同一单词 Execution，靠语气区分（见 tools/make-edge-batch.py 的 finalize / TONE_OVERRIDE）。",
   "voice": "Edge TTS Michelle(-10Hz) + Aria(+0Hz)，rate -10%；EQ 塑形（Michelle 底 + 35% Aria 谱形）；V3 轻柔（升 6Hz + 频谱倾斜）；停顿压到 100ms",
   "freqLegend": {
     "F5": "极高频（每次操作）→ 1 词",
@@ -32,7 +32,7 @@
 
     { "event": "Maximize",                  "zh": "最大化窗口",             "en": "Readiness",                                                 "freq": "F5", "group": "界面" },
     { "event": "Minimize",                  "zh": "最小化窗口",             "en": "Hidden",                                                "freq": "F5", "group": "界面" },
-    { "event": "RestoreUp",                 "zh": "向上还原窗口",           "en": "Restoring up",                                              "freq": "F5", "group": "界面" },
+    { "event": "RestoreUp",                 "zh": "向上还原窗口",           "en": "Readiness",                                              "freq": "F5", "group": "界面" },
     { "event": "RestoreDown",               "zh": "向下还原窗口",           "en": "Restoring down",                                              "freq": "F5", "group": "界面" },
     { "event": "Open",                      "zh": "打开",                   "en": "Execution.",                                            "freq": "F5", "group": "界面" },
     { "event": "Close",                     "zh": "关闭",                   "en": "Execution.",                                            "freq": "F5", "group": "界面" },

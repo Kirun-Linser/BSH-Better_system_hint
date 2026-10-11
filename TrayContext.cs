@@ -66,7 +66,30 @@ public sealed class TrayContext : ApplicationContext
         // 兜底：任何退出路径（含系统注销）都不留钩子
         Application.ApplicationExit += (_, _) => SafeStop();
 
+        ApplyMenuTheme();                      // 托盘菜单不在控件树里，必须单独上色
+        AppTheme.Changed += ApplyMenuTheme;    // 切主题时跟着变
+
         RefreshState();
+    }
+
+    /// <summary>
+    /// 给托盘右键菜单上色。
+    /// <para>
+    /// ⚠️ <b>为什么不能靠 <see cref="AppTheme.ApplyTo"/></b>：<see cref="ContextMenuStrip"/> 不是控件树成员
+    /// （它挂给 <see cref="NotifyIcon"/> 而不是某个 Control 的 Controls），那趟递归永远遍历不到它 ——
+    /// 深色档下它一直是系统默认的白底黑字。菜单只能用 <see cref="ToolStripRenderer"/> 接管，
+    /// 见 <see cref="DarkMenuRenderer"/>。
+    /// </para>
+    /// <para>浅色档回退成系统默认渲染器，与「浅色档交回系统绘制」的既有约定一致。</para>
+    /// </summary>
+    private void ApplyMenuTheme()
+    {
+        var p = AppTheme.Palette;
+        _menu.Renderer = p.NativeControls ? null : new DarkMenuRenderer();
+        _menu.BackColor = p.Surface;
+        _menu.ForeColor = p.Foreground;
+        // 菜单项自身的 ForeColor 也要给：渲染器的 OnRenderItemText 之外，系统在部分状态下会直接用它
+        foreach (ToolStripItem item in _menu.Items) item.ForeColor = p.Foreground;
     }
 
     /// <summary>
