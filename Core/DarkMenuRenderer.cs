@@ -45,14 +45,19 @@ public sealed class DarkMenuRenderer : ToolStripProfessionalRenderer
         /// <summary>菜单外框。</summary>
         public override Color MenuBorder => P.Border;
 
-        /// <summary>悬停项的外框。</summary>
-        public override Color MenuItemBorder => P.Selection;
+        /// <summary>悬停项的外框（不再用蓝色：用户反馈那道蓝刺眼）。</summary>
+        public override Color MenuItemBorder => P.Border;
 
-        /// <summary>悬停 / 高亮项的背景。</summary>
-        public override Color MenuItemSelected => P.Selection;
+        /// <summary>
+        /// 悬停 / 高亮项的背景。
+        /// <para>2026-10-11 用户反馈「蓝色太刺眼」⇒ 不再用 <see cref="ThemePalette.Selection"/>（#1F3A5F），
+        /// 改用 <see cref="ThemePalette.AlternatingRow"/>（#151C2E = RGB 21,28,46，正是用户指定的值）
+        /// —— 它本来就是调色板里的既有语义色，不额外引入新色值。表格的选中行不受影响，仍是原来的蓝。</para>
+        /// </summary>
+        public override Color MenuItemSelected => P.AlternatingRow;
 
-        public override Color MenuItemSelectedGradientBegin => P.Selection;
-        public override Color MenuItemSelectedGradientEnd => P.Selection;
+        public override Color MenuItemSelectedGradientBegin => P.AlternatingRow;
+        public override Color MenuItemSelectedGradientEnd => P.AlternatingRow;
 
         /// <summary>按下态：比悬停稍暗，用弱化背景。</summary>
         public override Color MenuItemPressedGradientBegin => P.Muted;

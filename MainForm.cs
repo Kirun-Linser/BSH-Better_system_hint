@@ -119,7 +119,9 @@ public sealed class MainForm : Form
         _list.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; // 各列按 FillWeight 分宽度
         _list.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         _list.RowTemplate.Height = 26;            // 行高稍增：中英文混排更好看
-        _list.ShowCellToolTips = true;            // 列宽不够时悬停看全文（ToolTip 在 Reload 里逐格设）
+        // ⚠️ 2026-10-11 用户要求「不要悬停信息」⇒ 关掉单元格 ToolTip。
+        // Reload() 里逐格的 ToolTipText 赋值保留着（不显示但无害），将来想恢复只需把这一行改回 true。
+        _list.ShowCellToolTips = false;
         // ⚠️ 2026-10-11 用户截图指出"右侧白块"：DataGridView 的滚动条是**它自己画的**，
         // 不是标准 ScrollBar 控件 —— 实测 SetWindowTheme(handle,"DarkMode_Explorer") 虽返回 S_OK，
         // 但 AllowDarkModeForWindow 返回 False（窗口根本不支持深色外观），所以那条滚动条永远是系统的浅色。

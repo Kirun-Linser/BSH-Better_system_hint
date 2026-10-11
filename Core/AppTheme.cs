@@ -178,7 +178,9 @@ public static class AppTheme
         background: ThemePalette.Hex("#0F172A"),          // 窗体背景
         foreground: ThemePalette.Hex("#F8FAFC"),          // 前景文字
         surface: ThemePalette.Hex("#1B2336"),             // 表格普通行 / 输入区 / 下拉框
-        alternatingRow: ThemePalette.Hex("#151C2E"),      // 表格交替行（比普通行略暗）
+        // 表格交替行（比普通行略暗）。2026-10-11 用户反馈原值 #151C2E(21,28,46) 的蓝调刺眼，
+        // 改为中性深灰 #151517(21,21,23)。托盘菜单的悬停底色也用这个值（见 DarkMenuRenderer）。
+        alternatingRow: ThemePalette.Hex("#151517"),
         muted: ThemePalette.Hex("#272F42"),               // 弱化背景（按钮按下态 / 行头）
         mutedForeground: ThemePalette.Hex("#94A3B8"),     // 弱化文字（空槽）
         border: ThemePalette.Hex("#475569"),              // 边框 / 网格线
@@ -398,7 +400,9 @@ public static class AppTheme
                 if (!p.NativeControls)
                 {
                     b.FlatAppearance.BorderColor = p.Border;
-                    b.FlatAppearance.MouseOverBackColor = p.Selection;
+                    // 2026-10-11 用户要求「不要悬停信息」⇒ 悬停不再变色（设成按钮自身底色即"无变化"）。
+                    // 原值是 p.Selection（蓝），用户反馈刺眼。按下态（MouseDownBackColor）保留：那是点击反馈，不是悬停。
+                    b.FlatAppearance.MouseOverBackColor = p.Surface;
                     b.FlatAppearance.MouseDownBackColor = p.Muted;
                 }
                 break;
