@@ -227,6 +227,7 @@ public sealed class MainForm : Form
         _presetBox.DisplayMember = nameof(PresetInfo.Name);
         buttons.Controls.Add(_presetBox);
         buttons.Controls.Add(MakeButton("应用预设…", ApplySelectedPreset));
+        buttons.Controls.Add(MakeButton("应用提示音…", OpenAppSoundForm));
 
         buttons.Controls.Add(MakeButton("▶ 试听", Preview));
         buttons.Controls.Add(MakeButton("替换音效…", Replace));
@@ -820,6 +821,14 @@ public sealed class MainForm : Form
     /// 兼容旧入口（托盘曾经直接调它）：转调 <see cref="ApplyProfile"/> 的「个性化设置」。
     /// 界面上不再有独立的"应用语音方案…"按钮 —— 统一走两个方案按钮，避免两个入口两套逻辑。
     /// </summary>
+    /// <summary>打开「应用提示音」对话框（给特定应用配启动 / 退出时的提示音）。</summary>
+    private void OpenAppSoundForm()
+    {
+        using var f = new AppSoundForm();
+        f.ShowDialog(this);
+        UpdateProfileStatus();   // 规则可能变了，状态栏跟着刷新
+    }
+
     public void ApplyVoiceScheme() => ApplyProfile(ProfileStore.PersonalId);
 
     /// <summary>
