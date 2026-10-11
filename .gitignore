@@ -10,7 +10,11 @@ dist-new/
 
 # ── 本地素材 / 中间产物 ──────────────────────────────
 # 自制音频的工作目录（原始素材 + 中间产物，约 86 MB）
-voice/
+# ⚠️ 必须写 voice/* 而不是 voice/：父目录一旦被整条排除，
+#    后面的 !voice/lines.json 就再也捞不回来了（git 的硬规则）。
+voice/*
+# 台词真源（59 条 事件/中文/英文/频率档），丢了就重建不了语音
+!voice/lines.json
 # --report 的默认输出
 report.json
 # 验收脚本的产物：含本机绝对路径
@@ -35,3 +39,8 @@ profiles/personal/rules.json
 
 # ── 备份文件 ─────────────────────────────────────────
 *.bak
+
+# ── 本机语音微调脚本：个人工作工具，含硬编码本机路径，不入公开库 ──
+tools/remix-one.py
+tools/split-join-readying.py
+tools/join-ready-plus-reaning-ing.py
