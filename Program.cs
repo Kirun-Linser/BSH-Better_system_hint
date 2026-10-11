@@ -367,16 +367,14 @@ static class Program
             var dir = Path.GetDirectoryName(full);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-            // 顺序不能反：先快照，后写注册表
-            SchemeSnapshot.Capture($"应用预设「{preset.Info.Name}」前自动快照").Save(full);
-
-            foreach (var kv in usable) SoundScheme.SetSound(kv.Key, kv.Value);
+            // 真正的「快照 → 写槽」在 PresetStore.Apply 里（界面与 CLI 共用同一份，避免两套逻辑）
+            var r = PresetStore.Apply(preset, skipped, full);
 
             WriteLine($"applied preset {preset.Info.Id} name={preset.Info.Name} "
-                      + $"slots={usable.Count} skipped={skipped.Count} missing={missing.Count} "
-                      + $"rules={preset.Rules.Count} snapshot={full} registry=written");
-            if (skipped.Count > 0)
-                WriteLine("  跳过的槽（按 personal 的跳过偏好）：" + string.Join("、", skipped));
+                      + $"slots={r.Written} skipped={r.SkippedByUser} missing={r.Missing} "
+                      + $"rules={preset.Rules.Count} snapshot={r.SnapshotPath} registry=written");
+            if (r.SkippedEvents.Count > 0)
+                WriteLine("  跳过的槽：" + string.Join("、", r.SkippedEvents));
             if (missing.Count > 0)
                 WriteLine("  跳过的槽（音频缺失）：" + string.Join("、", missing));
             return 0;

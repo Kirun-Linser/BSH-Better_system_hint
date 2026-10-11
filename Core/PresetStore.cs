@@ -53,6 +53,17 @@ public static class PresetStore
     public static string SoundsDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BSH", "sounds");
 
+    /// <summary>
+    /// 预设自带音频的存放根目录：<c>%LOCALAPPDATA%\BSH\presets\&lt;id&gt;\sounds\</c>。
+    /// <para>⚠️ <b>为什么不放仓库里的 <c>profiles/presets/&lt;id&gt;/sounds/</c></b>：那是<b>会话工作目录</b>，
+    /// 受 ACL 沙箱约束时以用户身份运行的程序（含系统音频链路）可能读不到 —— 这正是
+    /// <c>tools\install-voice.ps1</c> 把音频装到 <c>%LOCALAPPDATA%</c> 的同一条理由。
+    /// 预设<b>定义</b>（preset.json）留在仓库里随代码走，音频则必须落在工作目录之外。</para>
+    /// </summary>
+    public static string PresetAudioDir(string presetId) =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                     "BSH", "presets", presetId, "sounds");
+
     /// <summary>给 <see cref="JsonDocument.Parse(string, JsonDocumentOptions)"/> 用（它要的是另一个类型）。</summary>
     private static readonly JsonDocumentOptions DocOpts = new()
     {
@@ -133,7 +144,7 @@ public static class PresetStore
                 {
                     var raw = p.Value.GetString();
                     if (string.IsNullOrWhiteSpace(raw)) continue;
-                    sounds[p.Name] = ResolveAudio(dir, raw!);
+                    sounds[p.Name] = ResolveAudio(id, raw!);
                 }
 
             var rules = new List<MonitorRule>();
@@ -153,12 +164,58 @@ public static class PresetStore
         }
     }
 
+    /// <summary>应用预设的结果。</summary>
+    /// <param name="Written">实际写入的槽数。</param>
+    /// <param name="SkippedByUser">按跳过偏好跳过的槽数。</param>
+    /// <param name="Missing">音频缺失而跳过的槽数。</param>
+    /// <param name="SkippedEvents">跳过的槽名（含用户跳过与音频缺失两类）。</param>
+    /// <param name="MissingEvents">其中因音频缺失而跳过的。</param>
+    /// <param name="SnapshotPath">应用前自动快照的落盘路径。</param>
+    public sealed record PresetApplyResult(
+        int Written, int SkippedByUser, int Missing,
+        IReadOnlyList<string> SkippedEvents, IReadOnlyList<string> MissingEvents,
+        string SnapshotPath);
+
+    /// <summary>
+    /// 把一个预设应用到系统：<b>先自动快照，再逐槽写注册表</b>。
+    /// <para>⚠️ <b>停监听引擎是调用方的责任</b> —— 顺序必须与「Windows 原样」一致（先停引擎再写注册表），
+    /// 而「什么时候该停」属于流程决策，不属于仓库层。界面与 CLI 都按这个约定调用。</para>
+    /// <para><b>音频缺失的槽跳过并计数，不整批失败</b>：预设只存映射，音频可能没跟着分发。</para>
+    /// </summary>
+    /// <param name="preset">要应用的预设。</param>
+    /// <param name="skipEvents">不该被改写的槽（来自 personal/profile.json 的 skipFreq + skipEvents）。</param>
+    /// <param name="snapshotPath">自动快照的落盘路径。</param>
+    public static PresetApplyResult Apply(Preset preset, IEnumerable<string>? skipEvents, string snapshotPath)
+    {
+        var skip = new HashSet<string>(skipEvents ?? [], StringComparer.OrdinalIgnoreCase);
+        var skippedByUser = new List<string>();
+        var missing = new List<string>();
+        var todo = new List<KeyValuePair<string, string>>();
+
+        foreach (var kv in preset.Sounds)
+        {
+            if (skip.Contains(kv.Key)) { skippedByUser.Add(kv.Key); continue; }
+            if (!File.Exists(kv.Value)) { missing.Add(kv.Key); continue; }
+            todo.Add(kv);
+        }
+
+        // 顺序不能反：先快照，后写注册表
+        SchemeSnapshot.Capture($"应用预设「{preset.Info.Name}」前自动快照").Save(snapshotPath);
+        foreach (var kv in todo) SoundScheme.SetSound(kv.Key, kv.Value);
+
+        var allSkipped = skippedByUser.Concat(missing).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        return new PresetApplyResult(todo.Count, skippedByUser.Count, missing.Count, allSkipped, missing, snapshotPath);
+    }
+
     /// <summary>把 <c>sounds</c> 里的值解析成绝对路径（规则见类文档）。</summary>
-    public static string ResolveAudio(string presetDir, string raw)
+    /// <param name="presetId">预设 id（<c>sounds/</c> 前缀要按它定位到 %LOCALAPPDATA% 下）。</param>
+    /// <param name="raw">preset.json 里写的值。</param>
+    public static string ResolveAudio(string presetId, string raw)
     {
         if (raw.StartsWith("sounds/", StringComparison.OrdinalIgnoreCase)
             || raw.StartsWith("sounds\\", StringComparison.OrdinalIgnoreCase))
-            return Path.GetFullPath(Path.Combine(presetDir, raw));
+            // Path.GetFileName 同时认 / 与 \ 两种分隔符，省得在 C# 源码里写反斜杠字面量
+            return Path.Combine(PresetAudioDir(presetId), Path.GetFileName(raw));
 
         if (Path.IsPathRooted(raw)) return raw;
 
