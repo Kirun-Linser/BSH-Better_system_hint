@@ -31,6 +31,12 @@ static class Program
     /// <summary>命令行参数名：方案预演的只读投影（不写注册表、不写文件；证明"会改哪些槽、跳哪些槽、启哪些监听器"）。</summary>
     private const string ProfilePlanArg = "--profile-plan";
 
+    /// <summary>命令行参数名：列出可用预设（只读，不写任何东西）。</summary>
+    private const string PresetListArg = "--preset-list";
+
+    /// <summary>命令行参数名：应用某套预设（会写注册表，仅供自动化验收）。</summary>
+    private const string ApplyPresetArg = "--apply-preset";
+
     /// <summary>报告序列化选项：缩进 + 中文不转义（两份 JSON 报告共用）。</summary>
     private static readonly JsonSerializerOptions JsonPretty = new()
     {
@@ -78,6 +84,19 @@ static class Program
         if (args.Any(a => a.Equals(ProfilePlanArg, StringComparison.OrdinalIgnoreCase)))
         {
             Environment.ExitCode = ProfilePlanCommand(args);
+            return;
+        }
+
+        if (args.Any(a => a.Equals(ApplyPresetArg, StringComparison.OrdinalIgnoreCase)))
+        {
+            Environment.ExitCode = ApplyPresetCommand(args);
+            return;
+        }
+
+        // 预设一览（纯插入，只读）：证明「预设能被发现、坏文件被跳过而不是炸掉」
+        if (args.Any(a => a.Equals(PresetListArg, StringComparison.OrdinalIgnoreCase)))
+        {
+            Environment.ExitCode = PresetListCommand(args);
             return;
         }
 
@@ -261,6 +280,114 @@ static class Program
     /// stdout 句柄有效，能正常拿到这一行。
     /// </para>
     /// </summary>
+    /// <summary>
+    /// <c>--preset-list</c>：列出全部可用预设（<b>只读</b>，不写注册表、不写文件）。
+    /// <para>输出形如 <c>preset eva-mech  builtin=1 sounds=39 rules=0  EVA 机械女声</c>；
+    /// 坏预设不会让它失败，而是列在末尾的「⚠️ 跳过」里。</para>
+    /// </summary>
+    /// <returns>恒 0（「一个预设都没有」不算错误）。</returns>
+    private static int PresetListCommand(string[] args)
+    {
+        var problems = new List<string>();
+        var list = PresetStore.List(problems);
+
+        WriteLine($"presets dir = {PresetStore.PresetsDir}");
+        WriteLine($"audio dir   = {PresetStore.SoundsDir}");
+        if (list.Count == 0)
+            WriteLine("未发现预设（profiles/presets/ 下没有可用的 preset.json）");
+
+        foreach (var p in list)
+        {
+            // 顺带报告音频缺失数：预设只存映射，音频要能在 audio dir 里找到才谈得上「可应用」
+            var preset = PresetStore.Load(p.Id, out _);
+            int missing = 0;
+            if (preset is not null)
+                missing = preset.Sounds.Values.Count(v => !File.Exists(v));
+            WriteLine($"preset {p.Id}  builtin={(p.Builtin ? 1 : 0)} sounds={p.SoundCount} rules={p.RuleCount} missing={missing}  {p.Name}");
+        }
+
+        foreach (var s in problems) WriteLine($"  ⚠️ 跳过：{s}");
+        return 0;
+    }
+
+    /// <summary>
+    /// <c>--apply-preset &lt;预设id&gt; [快照路径]</c>：应用预设（<b>会写注册表</b>）。
+    /// <para><b>顺序与「Windows 原样」一致</b>：先停监听引擎 → 自动快照 → 再逐槽写 ——
+    /// 中途失败最坏留下「音换了但没监听」，而反过来会留下「钩子在跑但音没换」。</para>
+    /// <para><b>音频缺失的槽跳过并汇总</b>，不整批失败：预设只存映射，音频可能没跟着分发
+    /// （体积与音源授权的原因，音频不入公开仓库）。</para>
+    /// </summary>
+    /// <returns>0 成功 / 3 预设不存在 / 4 全部音频缺失或写入失败。</returns>
+    private static int ApplyPresetCommand(string[] args)
+    {
+        UseUtf8Stdout();
+
+        int idx = Array.FindIndex(args, a => a.Equals(ApplyPresetArg, StringComparison.OrdinalIgnoreCase));
+        string id = ReadArg(args, idx + 1);
+
+        var preset = PresetStore.Load(id, out var problem);
+        if (preset is null)
+        {
+            WriteLine($"unknown preset: {id}（{problem}）");
+            return 3;
+        }
+
+        // 尊重用户的跳过偏好：personal\profile.json 的 skipFreq + skipEvents 是「用户不想被改的槽」，
+        // 与用哪套预设无关。少了这一步，应用预设会把 CCSelect / Open / Close 这些刻意留空的槽填上
+        // （2026-10-11 实测踩到：哈希从 0ce934c9 变成 2caeb740，差的就是这 3 个槽）。
+        var personal = ProfileStore.Find(ProfileStore.PersonalId);
+        var skip = personal is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : ProfileStore.PlanDetailed(personal).SkippedSlots
+                .Select(s => s.Event).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var missing = preset.Sounds.Where(kv => !File.Exists(kv.Value)).Select(kv => kv.Key).ToList();
+        var skipped = preset.Sounds.Keys.Where(k => skip.Contains(k)).ToList();
+        var usable = preset.Sounds.Where(kv => File.Exists(kv.Value) && !skip.Contains(kv.Key)).ToList();
+
+        if (usable.Count == 0)
+        {
+            WriteLine($"preset {id} 没有任何可用音频（{preset.Sounds.Count} 条映射全部缺失），未改动注册表");
+            return 4;
+        }
+
+        try
+        {
+            MonitorHost.Stop();      // 先停引擎再写注册表（与 windows-default 同一顺序约定）
+
+            string given = ReadArg(args, idx + 2);
+            string snapshotPath = given.Length > 0
+                ? given
+                : Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "BSH", "snapshots",
+                    $"auto-before-preset-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+
+            var full = Path.GetFullPath(snapshotPath);
+            var dir = Path.GetDirectoryName(full);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+            // 顺序不能反：先快照，后写注册表
+            SchemeSnapshot.Capture($"应用预设「{preset.Info.Name}」前自动快照").Save(full);
+
+            foreach (var kv in usable) SoundScheme.SetSound(kv.Key, kv.Value);
+
+            WriteLine($"applied preset {preset.Info.Id} name={preset.Info.Name} "
+                      + $"slots={usable.Count} skipped={skipped.Count} missing={missing.Count} "
+                      + $"rules={preset.Rules.Count} snapshot={full} registry=written");
+            if (skipped.Count > 0)
+                WriteLine("  跳过的槽（按 personal 的跳过偏好）：" + string.Join("、", skipped));
+            if (missing.Count > 0)
+                WriteLine("  跳过的槽（音频缺失）：" + string.Join("、", missing));
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            WriteLine($"apply preset 失败：{ex.GetType().Name} {ex.Message}");
+            return 4;
+        }
+    }
+
     private static int ApplyProfileCommand(string[] args)
     {
         // stdout 固定 UTF-8（无 BOM）——脚本侧请用 encoding='utf-8' 读取（路径可能含中文）
