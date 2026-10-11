@@ -175,7 +175,9 @@ public static class AppTheme
     /// </summary>
     public static ThemePalette Dark { get; } = new(
         nativeControls: false,
-        background: ThemePalette.Hex("#0F172A"),          // 窗体背景
+        // 窗体背景（含顶部按钮行、状态栏、表格空白区）。2026-10-11 用户要求「纯黑」
+        // —— 原 #0F172A(15,23,42) 是界面里面积最大也最蓝的一块。
+        background: ThemePalette.Hex("#000000"),
         foreground: ThemePalette.Hex("#F8FAFC"),          // 前景文字
         // 表格普通行 / 输入区 / 下拉框 / 深色档按钮底。2026-10-11 用户反馈原值 #1B2336(27,35,54)
         // 的蓝调刺眼，改为中性深灰 #1B1B1C(27,27,28)。
@@ -191,7 +193,8 @@ public static class AppTheme
         // 但不再刺眼。（旧的 #1E293B 只有 8.4，几乎看不出选中，那种是不合格的。）
         selection: ThemePalette.Hex("#1F3A5F"),
         selectionForeground: ThemePalette.Hex("#FFFFFF"), // 选中行文字（白字，压在深蓝上仍可读）
-        headerBackground: ThemePalette.Hex("#272F42"),    // 表头背景
+        // 表头背景：2026-10-11 用户要求「换成纯黑」（原 #272F42 = 39,47,66 带蓝调）。
+        headerBackground: ThemePalette.Hex("#000000"),
         headerForeground: ThemePalette.Hex("#F8FAFC"),    // 表头文字
         accent: ThemePalette.Hex("#22C55E"),              // 强调（主按钮 / 运行中）
         danger: ThemePalette.Hex("#EF4444"));             // 危险（失败 / 警告）
@@ -574,6 +577,39 @@ public static class AppTheme
     /// </summary>
     /// <param name="form">目标窗体（需已创建句柄）。</param>
     /// <param name="dark">true = 深色标题栏。</param>
+    /// <summary>
+    /// 标题栏的底色与文字色（<c>DWMWA_CAPTION_COLOR</c> = 35 / <c>DWMWA_TEXT_COLOR</c> = 36，Windows 11 22000+）。
+    /// <para><b>为什么单独做这一手</b>：<see cref="ApplyTitleBar"/> 用的 20/19 号属性只是「请系统用深色主题画」，
+    /// 底色仍由系统决定（深灰）；要让标题栏<b>纯黑</b>只能设 35 号。36 号必须一起设，否则黑底配黑字。</para>
+    /// <para>老系统没有这两个属性（返回 E_INVALIDARG）—— 静默忽略，标题栏保持系统默认。</para>
+    /// </summary>
+    private static void ApplyCaptionColor(Form form, bool dark)
+    {
+        try
+        {
+            if (dark)
+            {
+                int caption = ToColorRef(Palette.Background);   // 深色档 = 纯黑
+                int text = ToColorRef(Palette.Foreground);      // 白字
+                DwmSetWindowAttribute(form.Handle, 35, ref caption, sizeof(int));
+                DwmSetWindowAttribute(form.Handle, 36, ref text, sizeof(int));
+            }
+            else
+            {
+                int def = unchecked((int)0xFFFFFFFF);            // DWMWA_COLOR_DEFAULT：交回系统
+                DwmSetWindowAttribute(form.Handle, 35, ref def, sizeof(int));
+                DwmSetWindowAttribute(form.Handle, 36, ref def, sizeof(int));
+            }
+        }
+        catch
+        {
+            // dwmapi 缺失 / 非 Windows：外观失败不该影响功能
+        }
+    }
+
+    /// <summary><see cref="Color"/> → <c>COLORREF</c>（<c>0x00BBGGRR</c>）。DWM 要的是 BGR 顺序，不是 RGB。</summary>
+    private static int ToColorRef(Color c) => (c.B << 16) | (c.G << 8) | c.R;
+
     public static void ApplyTitleBar(Form form, bool dark)
     {
         if (form is null || !form.IsHandleCreated)
@@ -583,6 +619,12 @@ public static class AppTheme
             LastTitleBarTrace = "句柄未创建：跳过（等 HandleCreated 后再调）";
             return;
         }
+
+        // ── 标题栏底色 / 文字色（Windows 11 22000+，属性 35/36）──
+        // 2026-10-11 用户要求「最顶端（标题栏）换成纯黑」。attr 20/19 只能让系统画它自带的深灰，
+        // 想自定义底色必须另用这两个属性。值都是 COLORREF（0x00BBGGRR —— 注意是 BGR 顺序，不是 RGB）。
+        // 不支持的系统会返回 E_INVALIDARG，静默忽略；浅色档用 DWMWA_COLOR_DEFAULT 交回系统绘制。
+        ApplyCaptionColor(form, dark);
 
         int value = dark ? 1 : 0;      // 深色档传 1，浅色档传 0 —— 用户看的标题栏颜色就是这一位
         try

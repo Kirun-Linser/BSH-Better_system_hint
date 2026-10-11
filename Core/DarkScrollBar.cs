@@ -118,7 +118,9 @@ public sealed class DarkScrollBar : Control
     protected override void OnPaint(PaintEventArgs e)
     {
         var p = AppTheme.Palette;
-        e.Graphics.Clear(p.Muted);                        // 槽：弱化背景
+        // 槽（表格右侧那条侧边）：2026-10-11 用户要求「侧边的底色也换成纯黑」
+        // —— 原来用 Palette.Muted(#272F42) 带蓝调，现按用户指定改为纯黑。
+        e.Graphics.Clear(Color.Black);
 
         int thumb = ThumbHeight();
         int top = ThumbTop(thumb);
