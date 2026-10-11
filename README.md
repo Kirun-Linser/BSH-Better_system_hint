@@ -7,7 +7,7 @@
 BSH 给两条互不冲突的路：
 
 - **「Windows 原样」**：把 59 个系统声音事件槽**逐字节还原**成改造前的原始值（含注册表类型与「键在无值」形态），并停止监听 —— 一键回到出厂状态。
-- **「个性化设置」**：**不写注册表**，改为启动监听引擎，按 `profiles\personal\rules.json` 里启用的规则安装钩子，命中时补播你配的提示音。
+- **「个性化设置」**：**两件事一起做** —— ① 把未被跳过的系统声音事件槽指向自制语音；② 按 `profiles\personal\rules.json` 里启用的规则安装钩子，命中时补播你配的提示音。
 
 > 一切写入都只在 `HKCU`（当前用户），**不需要管理员权限**，不改任何系统文件。
 
@@ -20,7 +20,7 @@ BSH 给两条互不冲突的路：
 | 方案 id | 界面名 | 类型 | 真实动作 | 写注册表？ |
 |---|---|---|---|---|
 | `windows-default` | Windows 原样（还原 + 停止监听） | `RestoreBaseline` | **先停监听引擎**，再把 59 槽逐项还原成基线值 | ✅ 写 `HKCU` |
-| `personal` | 个性化设置（启用监听） | `Monitor` | 按规则表启动监听引擎；启用 0 条规则 = 零钩子 | ❌ 一个注册表 API 都不调 |
+| `personal` | 个性化设置（换提示音 + 启用监听） | `Monitor` | ① 把未被 `skipFreq`/`skipEvents` 跳过的槽指向语音（当前配置 = 56 槽）② 按规则表启动监听引擎 | ✅ 写（跳过的槽**不碰**） |
 
 - 内置方案登记见 `Core/ProfileStore.cs:52`，`personal` 的 `Kind` 是 `Monitor`（`Core/ProfileStore.cs:61`）。
 - 还原是**类型保真**的：基线里 22 个槽原本是 `REG_EXPAND_SZ`（字面值 `%SystemRoot%\media\X.wav`），还原时按原类型写回，绝不降级成 `REG_SZ`（`Core/SoundScheme.cs:186`、`Core/ProfileStore.cs:244`）。
@@ -47,7 +47,7 @@ BSH 给两条互不冲突的路：
 | `Keyboard` | 键盘 | `SetWindowsHookEx(WH_KEYBOARD_LL)` 低层全局钩子，只报按下 | `CapsLock`、`F24`、`VolumeUp` |
 | `Mouse` | 鼠标 | `SetWindowsHookEx(WH_MOUSE_LL)`，只报按键与滚轮，**不报移动** | `LeftDown`、`XButtonDown1`、`WheelUp` |
 | `WindowSwitch` | 窗口切换 | `SetWinEventHook(EVENT_SYSTEM_FOREGROUND, WINEVENT_OUTOFCONTEXT)` | `notepad.exe\|无标题 - 记事本` |
-| `ProcessStartStop` | 进程启停 | 轮询 `Process.GetProcesses()` 快照对比（每 1500 ms，刻意不用 WMI） | `start steam.exe` / `stop steam.exe` |
+| `ProcessStartStop` | 进程启停 | 轮询 `Process.GetProcesses()` 快照对比（每 300 ms，刻意不用 WMI） | `start steam.exe` / `stop steam.exe` |
 | `DeviceChange` | 设备插拔 | 隐藏顶层窗口收 `WM_DEVICECHANGE`（+ `RegisterDeviceNotification`） | `Arrival D:` / `Remove` |
 | `PowerSession` | 电源会话 | `WM_POWERBROADCAST` + `SystemEvents.SessionSwitch` | `AC` / `DC` / `Lock` / `Unlock` / … |
 | `Clipboard` | 剪贴板 | `AddClipboardFormatListener` + `WM_CLIPBOARDUPDATE` | `Text` / `Image` / `Files`（多类型用 `+` 连接） |
@@ -62,7 +62,7 @@ BSH 给两条互不冲突的路：
 1. 规则里 `sound` 直接写 **wav 绝对路径**；
 2. 规则里 `speakKey` 写**事件名**，从语音方案（`%LOCALAPPDATA%\BSH\sounds\voice-scheme.json`）里取（`Core/Monitoring/MonitorEngine.cs:308`、`Core/VoiceScheme.cs:19`）。
 
-素材是本地自制的，生成脚本在 `tools/`（本机实装的那套：**SAPI `Microsoft Zira Desktop` 底音 + `tools/robotize.py` 机械化后处理**，经 `tools/install-voice.ps1` 装到 `%LOCALAPPDATA%\BSH\sounds\`）。另有两条可选的实验路线：**Edge 神经语音 Aria×Michelle 混合**（`tools/make-edge-batch.py`，幅度谱 0.35×Aria + 0.65×Michelle）与 **EVA 风格后处理**（`tools/make-eva-voice.py`）。产物一律不入库（见第 8 节）。
+素材是本地自制的，生成脚本在 `tools/`（**当前实装的是 Edge 神经语音**：`tools/make-edge-batch.py` 合成 Aria×Michelle 混合、字幕真源 `voice/lines.json` rev3，经 `tools/install-voice.ps1` 装到 `%LOCALAPPDATA%\BSH\sounds\`）。判定依据（2026-10-11 实测）：装机那 59 个 wav 与 `voice/edge-batch/out/` 的产物 **59/59 逐字节相同**。另有两条早期试过、**未采用**的路线：**SAPI `Microsoft Zira Desktop` + `tools/robotize.py` 机械化后处理**，与 **EVA 风格后处理**（`tools/make-eva-voice.py`）。产物一律不入库（见第 8 节）。
 
 ---
 
@@ -72,16 +72,16 @@ BSH 给两条互不冲突的路：
 
 ```powershell
 cd D:\O级项目管理\BSH
-& 'C:\Users\11\.dotnet\dotnet.exe' build BSH.csproj -c Release
+& "$env:USERPROFILE\.dotnet\dotnet.exe" build BSH.csproj -c Release
 ```
 
 ### 2.2 运行（⚠️ 必须带 `DOTNET_ROOT`）
 
-本机 PATH 里的 `dotnet` 只有 8.x，而本工程是 `net10.0-windows`；用户级 SDK 10 装在 `C:\Users\11\.dotnet`。所以命令行跑 dll 时必须显式给 `DOTNET_ROOT`：
+本机 PATH 里的 `dotnet` 只有 8.x，而本工程是 `net10.0-windows`；用户级 SDK 10 装在 `$env:USERPROFILE\.dotnet`。所以命令行跑 dll 时必须显式给 `DOTNET_ROOT`：
 
 ```powershell
-$env:DOTNET_ROOT='C:\Users\11\.dotnet'
-& 'C:\Users\11\.dotnet\dotnet.exe' bin\Release\net10.0-windows\BSH.dll <参数>
+$env:DOTNET_ROOT="$env:USERPROFILE\.dotnet"
+& "$env:USERPROFILE\.dotnet\dotnet.exe" bin\Release\net10.0-windows\BSH.dll <参数>
 ```
 
 - **不带参数** = 托盘常驻：单击托盘图标打开面板，关闭按钮只隐藏窗口，真正退出走托盘菜单「退出（会停止监听）」（`Program.cs:107`、`TrayContext.cs:49`）。
@@ -91,11 +91,11 @@ $env:DOTNET_ROOT='C:\Users\11\.dotnet'
 ### 2.3 切换方案
 
 ```powershell
-# ① 个性化设置（启用监听）：不写注册表；启用 0 条规则就返回 monitors=0
-& 'C:\Users\11\.dotnet\dotnet.exe' bin\Release\net10.0-windows\BSH.dll --apply-profile personal
+# ① 个性化设置：改写未被跳过的槽（当前 56 个）＋ 启动监听引擎（0 条规则 = 零钩子）
+& "$env:USERPROFILE\.dotnet\dotnet.exe" bin\Release\net10.0-windows\BSH.dll --apply-profile personal
 
 # ② Windows 原样（还原 + 停止监听）：会写 HKCU，写之前自动快照
-& 'C:\Users\11\.dotnet\dotnet.exe' bin\Release\net10.0-windows\BSH.dll --apply-profile windows-default
+& "$env:USERPROFILE\.dotnet\dotnet.exe" bin\Release\net10.0-windows\BSH.dll --apply-profile windows-default
 #    输出形如：applied windows-default changed=59 snapshot=C:\Users\<你>\AppData\Roaming\BSH\snapshots\auto-before-profile-<时间戳>.json
 ```
 
@@ -105,7 +105,7 @@ $env:DOTNET_ROOT='C:\Users\11\.dotnet'
 ### 2.4 发布（自包含单文件）
 
 ```powershell
-& 'C:\Users\11\.dotnet\dotnet.exe' publish BSH.csproj -c Release -r win-x64 --self-contained true `
+& "$env:USERPROFILE\.dotnet\dotnet.exe" publish BSH.csproj -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o dist
 ```
 
@@ -124,7 +124,7 @@ $env:DOTNET_ROOT='C:\Users\11\.dotnet'
 | `--monitor-report` | `[输出路径]` | 监听引擎体检：对 8 类监听器各做一次「探针启动 → 读状态 → 立刻停止」，报告里的「可启动」是实测值 | ❌ 只读 | 0 成功 / 5 写盘失败（`Program.cs:442`） |
 | `--monitor-status` | `[--live]` | 监听接线状态：规则表路径与存在性、启用条数、8 类监听器的装机前提、只读预演。**默认不启引擎** | ❌ 只读 | 0 / 8（`--live` 时监听器没起齐）（`Program.cs:266`） |
 | `--monitor-selftest` | `<秒数>` | 监听引擎自检：真装钩子、`SendInput` 注入 3 次 `F24`、真写 2 个文件，按**事件级实测**计数；缺省 4 秒 | ❌ 只读 | 0 通过 / 1 键盘不足 / 2 文件不足 / 3 都不足（`Core/Monitoring/MonitorSelfTest.cs:174`） |
-| `--apply-profile` | `<方案id> [快照路径]` | 应用方案。还原类**会写注册表**（先自动快照）；监听类只起引擎，输出 `registry=untouched` | ✅ 还原类会 | 0 / 3 方案 id 不存在 / 4 应用失败（`Program.cs:197`） |
+| `--apply-profile` | `<方案id> [快照路径]` | 应用方案。两类都会写注册表（个人化写语音槽、Windows 原样写还原值）；**还原类写前自动快照**，个人化**不写快照**（`Program.cs:287` 固定输出 `snapshot=none`，它的回滚走「Windows 原样」+ 基线） | ✅ 还原类会 | 0 / 3 方案 id 不存在 / 4 应用失败（`Program.cs:197`） |
 | `--snapshot-check` | `capture <输出>`｜`normalize <输入> <输出>`｜`plan <输入>` | 快照类型保真的自检；**不调用** `SchemeSnapshot.Apply`，唯一的写盘是调用方指定的那个 JSON | ❌ 只读 | 0 / 6 参数不对或读写失败（`Core/SnapshotSelfCheck.cs:24`） |
 | `--slot-plan` | `<快照文件>` | 槽位还原动作的**只读投影**：逐槽打印 `SetValue(ExpandString)` / `DeleteValue` / `DeleteSubKeyTree` | ❌ 只读，且**不写任何文件** | 0 / 7（`Core/SlotPlanSelfCheck.cs:27`） |
 
@@ -143,7 +143,7 @@ $env:DOTNET_ROOT='C:\Users\11\.dotnet'
 ```
 BSH/
 ├─ BSH.csproj                      net10.0-windows / WinExe / UseWindowsForms
-├─ Program.cs                      CLI 参数与入口分派（552 行）
+├─ Program.cs                      CLI 参数与入口分派（719 行）
 ├─ MainForm.cs                     主面板：59 事件总览 / 试听 / 替换 / 静音 / 一键重排 / 快照
 ├─ TrayContext.cs                  托盘常驻 + 菜单 + 引擎生命周期兜底
 ├─ Core/
@@ -180,7 +180,7 @@ BSH/
 ├─ profiles/
 │  ├─ windows-default/baseline-appevents.json   59 槽基线（35 String + 22 ExpandString + 2 Missing）
 │  └─ personal/
-│     ├─ profile.json              占位（id / name / kind / note）
+│     ├─ profile.json              方案定义（kind / applyVoiceScheme / skipFreq / skipEvents）
 │     ├─ README.md                 个人配置目录的约定说明
 │     ├─ rules.example.json        ★ 公开示例：8 类各一条、全部 enabled=false
 │     ├─ rules.json                ❌ 真实规则表（个人配置，不入库，需自己从示例复制）
@@ -308,6 +308,13 @@ JSON 用**小写驼峰**（`RuleStore` 的序列化策略是 `CamelCase` + 属�
 - **文件监听不递归**（`IncludeSubdirectories = false`，`FileSystemMonitor.cs:73`）；缓冲 64 KB，繁忙目录上仍可能溢出（溢出会记 `LastError`，不抛异常）。
 - **`Clipboard` 明细可能是 `Unknown`**：剪贴板同一时刻只允许一个进程打开，被占用是常态、不是故障（`ClipboardMonitor.cs:70`）。
 - 面板的「一键重排」只处理**空槽与撞车**，不是自动挑音效。
+- ⚠️ **它的计划里没有 `skipEvents` 的例外**（2026-10-11 读代码 + `--report` 实测）：`Core/ReorderPlan.cs` 的补空表
+  把 `CCSelect` / `Open` / `Close` 也列在里面，而 `MainForm.RunReorder` 完全不读跳过键。当前状态下点这个按钮，
+  会把这三个槽填成系统自带音效（`Windows Pop-up Blocked` / `Windows Recycle` / `Windows Navigation Start`）——
+  而按设计它们应当留空：`CCSelect` 永久留空（BSH 自己选行 / 选下拉时不该被自己的提示音吵到，且触发极频繁），
+  `Open` / `Close` 交给监听引擎（这两个事件**任何程序**都能触发，后台同步、索引器、自动更新都会碰，
+  直接配在槽里会「没操作也响」）。**当前处置：保留功能、不改代码**（用户 2026-10-11 决定，自己注意不点）；
+  点之前可以用 `--report` 先看完整的 `reorderPlan`。
 
 ### 6.3 注册表安全性
 
