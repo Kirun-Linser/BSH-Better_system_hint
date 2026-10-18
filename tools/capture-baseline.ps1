@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     采集「Windows 原样」基线：HKCU\AppEvents\Schemes\Apps\.Default 下每个事件 .Current 的
     **未展开字面值 + 注册表值类型**。

@@ -1,4 +1,4 @@
-# BSH · 安装语音方案（幂等）
+﻿# BSH · 安装语音方案（幂等）
 #
 # 读 voice\lines.json，把 voice\out\*.wav 按「中文,英文.wav」命名复制到：
 #   1) %LOCALAPPDATA%\BSH\sounds\        ← 系统实际读取的位置（注册表指向这里）
