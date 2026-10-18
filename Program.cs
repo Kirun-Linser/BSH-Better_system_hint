@@ -37,6 +37,12 @@ static class Program
     /// <summary>命令行参数名：应用某套预设（会写注册表，仅供自动化验收）。</summary>
     private const string ApplyPresetArg = "--apply-preset";
 
+    /// <summary>命令行参数名：开机自启动开关（status / on / off；写 HKCU 的 Run 键，用户级、不需要管理员）。</summary>
+    private const string AutostartArg = "--autostart";
+
+    /// <summary>命令行参数名：GUI 冒烟自测（真建面板与规则窗口、截 PNG 后退出；不写注册表、不改规则文件）。</summary>
+    private const string UiSmokeArg = "--ui-smoke";
+
     /// <summary>报告序列化选项：缩进 + 中文不转义（两份 JSON 报告共用）。</summary>
     private static readonly JsonSerializerOptions JsonPretty = new()
     {
@@ -54,7 +60,10 @@ static class Program
     /// <c>--snapshot-check capture|normalize|plan &lt;路径…&gt;</c> = 快照类型保真自检（只读注册表，只写 JSON 文件）；
     /// <c>--slot-plan &lt;快照文件&gt;</c> = 槽位还原动作的只读投影（不写注册表、不写文件，靠 fixture 证明空槽还原语义）；
     /// <c>--profile-plan [方案id]</c> = 方案预演的只读投影：列出会写的事件槽、跳过的频率档、会启的监听器
-    /// （不写注册表、不写文件，默认 <c>personal</c>；退出码 0 成功 / 7 方案不存在）。
+    /// （不写注册表、不写文件，默认 <c>personal</c>；退出码 0 成功 / 7 方案不存在）；
+    /// <c>--autostart status|on|off</c> = 开机自启动开关（缺省 status 只读；on/off 写 HKCU 的 Run 键）；
+    /// <c>--ui-smoke [输出目录] [light|dark]</c> = GUI 冒烟自测：真建主面板与规则窗口、各截一张 PNG 后退出
+    /// （不写注册表、不改规则文件；指定 light/dark 时临时改 ui.json 并在退出前恢复）。
     /// </summary>
     [STAThread]
     static void Main(string[] args)
@@ -118,6 +127,18 @@ static class Program
             return;
         }
 
+        if (args.Any(a => a.Equals(UiSmokeArg, StringComparison.OrdinalIgnoreCase)))
+        {
+            Environment.ExitCode = UiSmokeCommand(args);
+            return;
+        }
+
+        if (args.Any(a => a.Equals(AutostartArg, StringComparison.OrdinalIgnoreCase)))
+        {
+            Environment.ExitCode = AutostartCommand(args);
+            return;
+        }
+
         if (args.Any(a => a.Equals(ApplyProfileArg, StringComparison.OrdinalIgnoreCase)))
         {
             Environment.ExitCode = ApplyProfileCommand(args);
@@ -134,6 +155,10 @@ static class Program
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
+
+        // 首次运行默认开启开机自启动（2026-10-18 用户定）。
+        // 之后用户在面板 / 托盘里取消，不会在下次启动时被重新打开 —— 见 AutoStart.EnsureDefault 的标记文件。
+        AutoStart.EnsureDefault();
 
         // 启动时自动启用「个性化设置」：写事件槽 + 装监听钩子。
         // ⚠️ 2026-10-11 用户实测反馈：托盘启动后若不去点「个性化设置」，监听引擎不会跑，
@@ -791,6 +816,202 @@ static class Program
         {
             WriteLine($"monitor-report failed: {ex.Message}");
             return 5;
+        }
+    }
+
+    /// <summary>
+    /// GUI 冒烟自测：<c>--ui-smoke [输出目录] [light|dark]</c>。
+    /// <para>
+    /// 真建主面板与「监听规则」窗口，各截一张 PNG 后退出 —— 用来在没有人盯着屏幕的情况下，
+    /// 证明"界面能构造、能渲染、主题铺色没把控件弄成白底黑字"。<b>只读</b>：
+    /// 不写注册表、不保存规则表；指定 light/dark 时临时改 <c>ui.json</c>，退出前一定恢复。
+    /// </para>
+    /// </summary>
+    /// <returns>0 成功 / 1 构造或截图失败。</returns>
+    private static int UiSmokeCommand(string[] args)
+    {
+        UseUtf8Stdout();
+
+        int idx = Array.FindIndex(args, a => a.Equals(UiSmokeArg, StringComparison.OrdinalIgnoreCase));
+        string outArg = ReadArg(args, idx + 1);
+        string dir = outArg.Length > 0
+            ? Path.GetFullPath(outArg)
+            : Path.Combine(Path.GetTempPath(), $"bsh-ui-smoke-{DateTime.Now:yyyyMMdd-HHmmss}");
+        Directory.CreateDirectory(dir);
+
+        // 主题：缺省 = 沿用用户当前设置；显式 light/dark 时临时切换（退出前恢复）
+        string themeArg = args.Any(a => a.Equals("dark", StringComparison.OrdinalIgnoreCase)) ? "dark"
+            : args.Any(a => a.Equals("light", StringComparison.OrdinalIgnoreCase)) ? "light"
+            : "";
+        ThemeKind? want = themeArg switch
+        {
+            "dark" => ThemeKind.Dark,
+            "light" => ThemeKind.Light,
+            _ => null,
+        };
+
+        ApplicationConfiguration.Initialize();
+
+        string uiPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BSH", "ui.json");
+        string? backup = File.Exists(uiPath) ? File.ReadAllText(uiPath) : null;
+
+        try
+        {
+            if (want is not null)
+            {
+                string? uiDir = Path.GetDirectoryName(uiPath);
+                if (!string.IsNullOrEmpty(uiDir)) Directory.CreateDirectory(uiDir);
+                File.WriteAllText(uiPath, $"{{\"theme\":\"{want}\"}}");
+                AppTheme.Reload();
+            }
+
+            string suffix = want?.ToString().ToLowerInvariant() ?? "current";
+            string mainPng = Path.Combine(dir, $"main-{suffix}.png");
+            string rulesPng = Path.Combine(dir, $"rules-{suffix}.png");
+
+            using (var form = new MainForm())
+            {
+                form.Show();
+                PumpFor(600);
+                Capture(form, mainPng);
+                form.AllowClose = true;
+                form.Close();
+            }
+
+            using (var rules = new RulesForm())
+            {
+                rules.Show();
+                PumpFor(600);
+                Capture(rules, rulesPng);
+                rules.Close();
+            }
+
+            // 规则编辑对话框也截一张：字段多，最容易出现"标签/输入框错位或深色下白底"
+            string editPng = Path.Combine(dir, $"rule-edit-{suffix}.png");
+            using (var edit = new RuleEditDialog(null))
+            {
+                edit.Show();
+                PumpFor(500);
+                Capture(edit, editPng);
+                edit.Close();
+            }
+
+            WriteLine($"ui-smoke ok theme={(want?.ToString() ?? "current")} main={mainPng} rules={rulesPng} edit={editPng}");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            WriteLine($"ui-smoke failed: {ex.GetType().Name}: {ex.Message}");
+            return 1;
+        }
+        finally
+        {
+            if (want is not null)
+            {
+                // 恢复用户的 ui.json（这一步不恢复 = 会悄悄改掉用户的主题选择，绝不允许）
+                try
+                {
+                    if (backup is null) File.Delete(uiPath);
+                    else File.WriteAllText(uiPath, backup);
+                }
+                catch { /* 恢复失败只影响下次启动的主题，不影响功能 */ }
+                AppTheme.Reload();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 把窗体客户区截成 PNG。
+    /// <para>
+    /// <b>优先真实屏幕采样</b>（<c>CopyFromScreen</c>）：<c>DrawToBitmap</c> 不画 <see cref="StatusStrip"/>
+    /// 这类无窗口控件，也测不出"状态栏被挤出客户区"这种真实布局问题（2026-10-18 实测踩过）。
+    /// 因此先把窗口置顶、激活，再按客户区在屏幕上的位置采样；没有可用桌面时回退 <c>DrawToBitmap</c>。
+    /// </para>
+    /// </summary>
+    private static void Capture(Form form, string path)
+    {
+        form.TopMost = true;
+        form.Activate();
+        form.BringToFront();
+        PumpFor(300);
+
+        var size = form.ClientSize;
+        var origin = form.PointToScreen(Point.Empty);
+        try
+        {
+            using var bmp = new Bitmap(Math.Max(1, size.Width), Math.Max(1, size.Height));
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.CopyFromScreen(origin, Point.Empty, size);
+            }
+            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        catch
+        {
+            // 没有可用桌面（如远程会话被锁）时退回 DrawToBitmap：至少能证明控件树与配色能画出来
+            using var bmp = new Bitmap(Math.Max(1, size.Width), Math.Max(1, size.Height));
+            form.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+    }
+
+    /// <summary>泵消息并等待指定毫秒（无 Application.Run 时，窗口 / 表格需要它才有机会完成布局与绘制）。</summary>
+    private static void PumpFor(int ms)
+    {
+        long end = Environment.TickCount64 + ms;
+        while (Environment.TickCount64 < end)
+        {
+            Application.DoEvents();
+            Thread.Sleep(15);
+        }
+    }
+
+    /// <summary>
+    /// 开机自启动开关：<c>--autostart status|on|off</c>（缺省 = status）。
+    /// <para>只写 <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>，用户级、不需要管理员；<c>status</c> 只读。</para>
+    /// </summary>
+    /// <returns>0 成功 / 1 写注册表失败 / 2 动作名不认识。</returns>
+    private static int AutostartCommand(string[] args)
+    {
+        UseUtf8Stdout();
+
+        int idx = Array.FindIndex(args, a => a.Equals(AutostartArg, StringComparison.OrdinalIgnoreCase));
+        string action = ReadArg(args, idx + 1).ToLowerInvariant();
+        if (action.Length == 0) action = "status";
+
+        switch (action)
+        {
+            case "status":
+                WriteLine($"autostart enabled={AutoStart.IsEnabled} userChosen={AutoStart.UserChosen} defaultApplied={AutoStart.DefaultApplied}");
+                WriteLine($"  state={AutoStart.Describe()}");
+                WriteLine($"  command={AutoStart.CurrentCommand ?? "(none)"}");
+                return 0;
+
+            case "on":
+            {
+                var cmd = AutoStart.Enable();
+                if (cmd is null)
+                {
+                    WriteLine("autostart on failed（HKCU 的 Run 键不可写）");
+                    return 1;
+                }
+                WriteLine($"autostart on ok command={cmd}");
+                return 0;
+            }
+
+            case "off":
+                if (!AutoStart.Disable())
+                {
+                    WriteLine("autostart off failed（HKCU 的 Run 键不可写）");
+                    return 1;
+                }
+                WriteLine("autostart off ok");
+                return 0;
+
+            default:
+                WriteLine($"unknown autostart action: {action}（可用：status / on / off）");
+                return 2;
         }
     }
 

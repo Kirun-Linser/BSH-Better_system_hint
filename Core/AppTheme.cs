@@ -412,6 +412,12 @@ public static class AppTheme
                 }
                 break;
 
+            case CheckBox chk:                             // 复选框：文字跟随主题（勾选框本身由系统绘制）
+                chk.BackColor = p.Background;
+                chk.ForeColor = p.Foreground;
+                chk.FlatStyle = p.NativeControls ? FlatStyle.Standard : FlatStyle.Flat;
+                break;
+
             case TextBox t:                               // 输入框：BackColor 在所有样式下都生效，不用关视觉样式
                 t.BackColor = p.Surface;
                 t.ForeColor = p.Foreground;

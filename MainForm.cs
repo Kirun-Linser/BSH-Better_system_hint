@@ -39,6 +39,16 @@ public sealed class MainForm : Form
     /// <summary>主题切换按钮：三态循环（跟随系统 → 深色 → 浅色），文案形如「主题：跟随系统」。</summary>
     private readonly Button _themeButton = new();
 
+    /// <summary>
+    /// 「开机自启动」复选框（2026-10-18 用户要求：从托盘菜单搬上主面板）。
+    /// 勾选即写 <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>（用户级、不需要管理员）。
+    /// 托盘勾选项与面板靠 <see cref="AutoStart.Changed"/> 双向同步。
+    /// </summary>
+    private readonly CheckBox _autoStartBox = new();
+
+    /// <summary>true = 正在按代码同步复选框状态（此时忽略 CheckedChanged，防止事件回环）。</summary>
+    private bool _syncingAutoStart;
+
     /// <summary>按钮提示：必须留住引用，否则 <see cref="ToolTip"/> 会被 GC 回收、提示直接消失。</summary>
     private readonly ToolTip _tips = new();
 
@@ -97,6 +107,7 @@ public sealed class MainForm : Form
 
         BuildUi();
         SetUpToolTip();        // ToolTip 也是外观的一部分：深色自绘 + 限宽（见方法注释）
+        AutoStart.Changed += OnAutoStartStateChanged;   // 托盘勾选 / 启动默认值变化时同步本面板
         ApplyThemeToUi();      // 先上色再填数据：行颜色依赖当前主题
         Reload();
     }
@@ -223,6 +234,15 @@ public sealed class MainForm : Form
         buttons.Controls.Add(btnPersonal);
         buttons.Controls.Add(btnTakeover);
 
+        // 开机自启动：放在方案按钮之后 —— "开机就要有提示音"与"用哪套方案"是一组动作。
+        // 首次运行默认勾选（AutoStart.EnsureDefault），用户取消后不会再被自动打开。
+        _autoStartBox.Text = "开机自启动";
+        _autoStartBox.AutoSize = true;
+        _autoStartBox.Margin = new Padding(10, 7, 8, 0);
+        _autoStartBox.Checked = AutoStart.IsEnabled;
+        _autoStartBox.CheckedChanged += OnAutoStartChanged;
+        buttons.Controls.Add(_autoStartBox);
+
         // ── 预设：一个下拉 + 一个按钮 ──
         // 预设 = 一套「事件 → 音频」映射（+ 可选规则集）。与上面两套方案并列：三者都是"一键换整套"。
         _presetBox.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -233,6 +253,8 @@ public sealed class MainForm : Form
         buttons.Controls.Add(MakeButton("应用预设…", ApplySelectedPreset));
         buttons.Controls.Add(MakeButton("新建预设…", CreatePreset));
         buttons.Controls.Add(MakeButton("预设改名…", RenamePreset));
+        buttons.Controls.Add(MakeButton("删除预设…", DeletePreset));
+        buttons.Controls.Add(MakeButton("监听规则…", OpenRules));
         buttons.Controls.Add(MakeButton("应用提示音…", OpenAppSoundForm));
 
         buttons.Controls.Add(MakeButton("▶ 试听", Preview));
@@ -250,7 +272,10 @@ public sealed class MainForm : Form
         _themeButton.Click += (_, _) => ToggleTheme();
         buttons.Controls.Add(_themeButton);
 
-        var status = new StatusStrip { Dock = DockStyle.Fill, SizingGrip = false };
+        // 状态栏单独 Dock 在窗体底部，不放进上面的 TableLayoutPanel：
+        // 2026-10-18 加了「开机自启动」等控件后按钮行变成 3 行，AutoSize 行在 TableLayoutPanel 里
+        // 会把状态栏挤出客户区（截图实测：底部按钮被裁一半、状态栏整条消失）。状态栏只该被最外层钉住。
+        var status = new StatusStrip { Dock = DockStyle.Bottom, SizingGrip = false };
         status.Items.Add(_summary);
         status.Items.Add(new ToolStripStatusLabel { Spring = true });
         // 第二格：当前方案 + 引擎状态 + 启用规则数（监听模式的核心状态，常显）
@@ -262,13 +287,12 @@ public sealed class MainForm : Form
         });
         status.Items.Add(_hint);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
         // 列宽必须显式钉成 100%：TableLayoutPanel 不设 ColumnStyles 时列宽按"最宽子项"算，
         // 按钮行的 preferred 宽（约 1185px）会把列撑得比窗口还宽 —— 那样窗口拉窄时
         // 表格宽度纹丝不动，FillWeight 也就无从按比例分配（实测：窗口 860 与 1020 下列宽完全相同）。
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         // 表格 + 深色滚动条：**叠放**，不是并排。表格 Dock=Fill 占满容器，它自带的滚动条就长在
         // 最右侧那一小条里；自绘条按绝对坐标压在**同一个位置**上并提到最前，把那条系统浅色滚动条
@@ -287,8 +311,8 @@ public sealed class MainForm : Form
 
         root.Controls.Add(listHost, 0, 0);
         root.Controls.Add(buttons, 0, 1);
-        root.Controls.Add(status, 0, 2);
         Controls.Add(root);
+        Controls.Add(status);   // 先加 Fill 再加 Bottom：后添加的控件先停靠，状态栏因此固定在底部
 
         _hint.Text = "双击行 = 试听";
     }
@@ -483,11 +507,15 @@ public sealed class MainForm : Form
         ApplyNativeChrome();
     }
 
-    /// <summary>释放时退订主题广播，避免已销毁的窗体被后续的切换动作碰到。</summary>
+    /// <summary>释放时退订主题广播与自启广播，避免已销毁的窗体被后续的切换动作碰到。</summary>
     /// <param name="disposing">true = 由 Dispose() 主动释放。</param>
     protected override void Dispose(bool disposing)
     {
-        if (disposing) AppTheme.Changed -= ApplyThemeToUi;
+        if (disposing)
+        {
+            AppTheme.Changed -= ApplyThemeToUi;
+            AutoStart.Changed -= OnAutoStartStateChanged;
+        }
         base.Dispose(disposing);
     }
 
@@ -498,7 +526,12 @@ public sealed class MainForm : Form
     public void UpdateProfileStatus()
     {
         string name = ProfileStore.Find(MonitorHost.ActiveProfileId)?.Name ?? "未选择（不监听）";
-        _profile.Text = $"方案：{name}　·　引擎：{MonitorHost.DescribeState()}　·　{PersonalPlanText()}";
+        string autoStart = AutoStart.IsEnabled ? "开" : "关";
+        // 状态栏物理宽度有限：只留"方案 / 引擎 / 自启"三件事，写槽明细放进悬停提示。
+        // 2026-10-18 实测：原来把"提示音：写 36 槽（跳 3 个（档 0 + 事件 3））＋监听器 N 个"也塞在一行里，
+        // 结果状态栏第一格（事件统计）被整段挤出可见区 —— 状态栏信息要按"一眼能看完"来配。
+        _profile.Text = $"方案：{name}　·　引擎：{MonitorHost.DescribeState()}　·　自启：{autoStart}";
+        _profile.ToolTipText = $"{PersonalPlanText()}{Environment.NewLine}开机自启动：{AutoStart.Describe()}";
     }
 
     /// <summary>
@@ -517,6 +550,111 @@ public sealed class MainForm : Form
             ? "不跳"
             : $"跳 {plan.SkippedSlots.Count} 个（档 {plan.SkippedByFreq?.Count ?? 0} + 事件 {plan.SkippedByEvent?.Count ?? 0}）";
         return $"提示音：写 {plan.SlotWrites.Count} 槽（{skip}）＋监听器 {plan.MonitorLineCount} 个";
+    }
+
+    // ───────────────────────── 开机自启动 / 设置类操作 ─────────────────────────
+
+    /// <summary>
+    /// 用户勾选 / 取消「开机自启动」：立即写 / 删 <c>HKCU\...\Run</c> 的 <c>BSH</c> 值。
+    /// <para>写失败（注册表不可写）时把勾选状态回滚到真实状态，并弹窗说明 —— 绝不让界面显示一个假的"已开启"。</para>
+    /// </summary>
+    private void OnAutoStartChanged(object? sender, EventArgs e)
+    {
+        if (_syncingAutoStart) return;
+
+        if (_autoStartBox.Checked)
+        {
+            var cmd = AutoStart.Enable();
+            if (cmd is null)
+            {
+                SyncAutoStartBox();
+                MessageBox.Show(this, "写入开机自启动失败（注册表 HKCU 的 Run 键不可写）。", "BSH",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            _hint.Text = "已开启开机自启动：下次登录 Windows 时自动启动 BSH";
+        }
+        else
+        {
+            if (!AutoStart.Disable())
+            {
+                SyncAutoStartBox();
+                MessageBox.Show(this, "取消开机自启动失败（注册表 HKCU 的 Run 键不可写）。", "BSH",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            _hint.Text = "已关闭开机自启动";
+        }
+
+        UpdateProfileStatus();
+    }
+
+    /// <summary>别处（托盘菜单 / 启动默认值）改了自启状态时，把本面板的勾选框同步过来。</summary>
+    private void OnAutoStartStateChanged()
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(new Action(OnAutoStartStateChanged)); } catch { /* 句柄已销毁 */ }
+            return;
+        }
+        SyncAutoStartBox();
+        UpdateProfileStatus();
+    }
+
+    /// <summary>按注册表的真实状态同步勾选框（带防回环标志）。</summary>
+    private void SyncAutoStartBox()
+    {
+        _syncingAutoStart = true;
+        try { _autoStartBox.Checked = AutoStart.IsEnabled; }
+        finally { _syncingAutoStart = false; }
+    }
+
+    /// <summary>打开「监听规则」可视化编辑器（模态；保存后由窗口内询问是否立即重装监听钩子）。</summary>
+    public void OpenRules()
+    {
+        using var dlg = new RulesForm();
+        dlg.ShowDialog(this);
+        Reload();
+        UpdateProfileStatus();
+    }
+
+    // ───────────────────────────── 预设 ─────────────────────────────
+
+    /// <summary>
+    /// 删除当前选中的<b>用户自建</b>预设（内置预设只读；代码层也会拒绝）。
+    /// <para>会连它自带的音频目录（<c>%LOCALAPPDATA%\BSH\presets\&lt;id&gt;\sounds\</c>）一起删，所以先确认再动手。</para>
+    /// </summary>
+    private void DeletePreset()
+    {
+        if (_presetBox.SelectedItem is not PresetInfo info)
+        {
+            MessageBox.Show(this, "先在右边选一个预设。", "删除预设", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (info.Builtin)
+        {
+            MessageBox.Show(this, "内置预设不能删除（那是软件自带的那套）。", "删除预设",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        bool hasAudio = Directory.Exists(PresetStore.PresetAudioDir(info.Id));
+        var answer = MessageBox.Show(this,
+            $"确定删除预设「{info.Name}」？{Environment.NewLine}{Environment.NewLine}"
+            + $"会删除预设目录 profiles/presets/{info.Id}/（含 preset.json）"
+            + (hasAudio ? "，以及它自带的音频目录 %LOCALAPPDATA%/BSH/presets/" + info.Id + "/sounds/" : "")
+            + $"。{Environment.NewLine}此操作不可撤销（可先复制目录备份）。",
+            "删除预设", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes) return;
+
+        if (!PresetStore.Delete(info.Id, out var problem))
+        {
+            MessageBox.Show(this, $"删除失败：{problem}", "删除预设", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        RefreshPresets();
+        _hint.Text = $"已删除预设「{info.Name}」";
     }
 
     private static Button MakeButton(string text, Action onClick)
@@ -580,7 +718,7 @@ public sealed class MainForm : Form
         }
 
         int empty = _sounds.Count(x => x.IsEmpty);
-        _summary.Text = $"共 {_sounds.Count} 个事件　·　空槽 {empty}　·　撞车 {dupes.Count} 组";
+        _summary.Text = $"共 {_sounds.Count} 事件　·　空槽 {empty}　·　撞车 {dupes.Count} 组";
         UpdateProfileStatus();
     }
 

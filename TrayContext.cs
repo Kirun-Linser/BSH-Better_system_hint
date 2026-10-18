@@ -21,21 +21,30 @@ public sealed class TrayContext : ApplicationContext
 
     private readonly ToolStripMenuItem _defaultItem = new();
     private readonly ToolStripMenuItem _personalItem = new();
+    private readonly ToolStripMenuItem _takeoverItem = new();
+    private readonly ToolStripMenuItem _autoStartItem = new() { CheckOnClick = true };
     private readonly ToolStripMenuItem _statusItem = new();
     private MainForm? _form;
 
     public TrayContext()
     {
-        // 两个方案入口放最前：换整套音效是最高频动作
+        // 三套方案入口放最前：换整套音效是最高频动作
         _defaultItem.Click += (_, _) => ApplyProfile(ProfileStore.WindowsDefaultId);
         _personalItem.Click += (_, _) => ApplyProfile(ProfileStore.PersonalId);
+        _takeoverItem.Click += (_, _) => ApplyProfile(ProfileStore.TakeoverId);
         _statusItem.Click += (_, _) => ShowMonitorStatus();
 
         _menu.Items.Add(_stateItem);
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(_defaultItem);
         _menu.Items.Add(_personalItem);
+        _menu.Items.Add(_takeoverItem);
         _menu.Items.Add("打开面板…", null, (_, _) => ShowForm());
+        _menu.Items.Add("监听规则（可视化编辑）…", null, (_, _) =>
+        {
+            ShowForm();
+            _form?.OpenRules();
+        });
         _menu.Items.Add("一键重排（先自动快照）…", null, (_, _) =>
         {
             ShowForm();
@@ -48,35 +57,38 @@ public sealed class TrayContext : ApplicationContext
 
         // 开机自启动：勾选即写 HKCU 的 Run 键（用户级，不需要管理员）。
         // 与「BSH 接管」是一对：接管把提示音交给 BSH 判断，那就得保证 BSH 开机就在跑。
-        var autoStartItem = new ToolStripMenuItem("开机自启动")
+        // 2026-10-18 起主面板也有同一个开关，两边靠 AutoStart.Changed 双向同步。
+        _autoStartItem.Text = "开机自启动";
+        _autoStartItem.Checked = AutoStart.IsEnabled;
+        _autoStartItem.Click += (_, _) =>
         {
-            CheckOnClick = true,
-            Checked = AutoStart.IsEnabled,
-        };
-        autoStartItem.Click += (_, _) =>
-        {
-            if (autoStartItem.Checked)
+            if (_autoStartItem.Checked)
             {
                 if (AutoStart.Enable() is null)
                 {
-                    autoStartItem.Checked = false;
+                    _autoStartItem.Checked = false;
                     MessageBox.Show("写入开机自启动失败（注册表 HKCU 的 Run 键不可写）。",
                         "BSH", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             else if (!AutoStart.Disable())
             {
-                autoStartItem.Checked = true;
+                _autoStartItem.Checked = true;
                 MessageBox.Show("取消开机自启动失败。", "BSH",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         };
-        _menu.Items.Add(autoStartItem);
+        _menu.Items.Add(_autoStartItem);
+        AutoStart.Changed += SyncAutoStartItem;
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add("退出（会停止监听）", null, (_, _) => ExitApp());
 
         // 每次弹出前刷新：状态是"现算"的，不用手动同步（引擎可能被界面那边启停过）
-        _menu.Opening += (_, _) => RefreshState();
+        _menu.Opening += (_, _) =>
+        {
+            RefreshState();
+            SyncAutoStartItem();
+        };
 
         _tray = new NotifyIcon
         {
@@ -150,6 +162,11 @@ public sealed class TrayContext : ApplicationContext
         _personalItem.Text = running
             ? $"个性化设置（换提示音 + 运行中：{monitors} 个监听器）…"
             : $"切换到「个性化设置」（换 {personalPlan?.SlotWrites.Count ?? 0} 槽提示音 + 启用监听）…";
+        bool takeoverRunning = running
+            && string.Equals(MonitorHost.ActiveProfileId, ProfileStore.TakeoverId, StringComparison.OrdinalIgnoreCase);
+        _takeoverItem.Text = takeoverRunning
+            ? "「BSH 接管」运行中（已清 18 槽 + 监听）…"
+            : "切换到「BSH 接管」（清 18 槽，改由规则判断响不响）…";
         _statusItem.Text = "监听状态详情…";
 
         // NotifyIcon.Text 上限 63 字符，超了会抛异常 —— 这里自己截断
@@ -205,6 +222,14 @@ public sealed class TrayContext : ApplicationContext
 
         MessageBox.Show(string.Join(Environment.NewLine, lines), "BSH · 监听状态",
             MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    /// <summary>把托盘的「开机自启动」勾选同步成注册表的真实状态（面板勾选 / 启动默认值变化都会走到）。</summary>
+    private void SyncAutoStartItem()
+    {
+        bool enabled = AutoStart.IsEnabled;
+        if (_autoStartItem.Checked == enabled) return;
+        _autoStartItem.Checked = enabled;
     }
 
     private void ShowForm()
