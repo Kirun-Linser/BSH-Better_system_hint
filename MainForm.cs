@@ -616,7 +616,8 @@ public sealed class MainForm : Form
         };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
-        SoundScheme.SetSound(s.Event, dlg.FileName);
+        // 值类型按基线保真（2026-10-18）：原本 REG_EXPAND_SZ 的槽不因手工替换被降级成 REG_SZ
+        SoundScheme.SetSound(s.Event, dlg.FileName, ProfileStore.VoiceWriteKind(s.Event));
         _hint.Text = $"{s.Event} → {Path.GetFileName(dlg.FileName)}";
         Reload();
     }
@@ -625,7 +626,7 @@ public sealed class MainForm : Form
     {
         var s = Selected;
         if (s is null) return;
-        SoundScheme.ClearSound(s.Event);
+        SoundScheme.ClearSound(s.Event, ProfileStore.VoiceWriteKind(s.Event));
         _hint.Text = $"{s.Event} 已设为静音";
         Reload();
     }

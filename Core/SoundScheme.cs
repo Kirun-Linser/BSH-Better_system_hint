@@ -193,7 +193,9 @@ public static class SoundScheme
     }
 
     /// <summary>把某个事件设为静音（写空值）—— 与系统"（无）"等价。</summary>
-    public static void ClearSound(string eventName) => SetSound(eventName, "");
+    /// <param name="valueKind">写入用的值类型；缺省 String。调用方一般传 <c>ProfileStore.VoiceWriteKind(event)</c> 保类型（2026-10-18）。</param>
+    public static void ClearSound(string eventName, RegistryValueKind valueKind = RegistryValueKind.String)
+        => SetSound(eventName, "", valueKind);
 
     /// <summary>
     /// 把某个事件的 <c>.Current</c> 子键整个删掉 —— 这是**快照里记着"键不存在"**的槽才该走的还原动作

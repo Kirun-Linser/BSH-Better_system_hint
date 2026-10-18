@@ -201,7 +201,8 @@ public static class PresetStore
 
         // 顺序不能反：先快照，后写注册表
         SchemeSnapshot.Capture($"应用预设「{preset.Info.Name}」前自动快照").Save(snapshotPath);
-        foreach (var kv in todo) SoundScheme.SetSound(kv.Key, kv.Value);
+        // 值类型按基线保真：原本 REG_EXPAND_SZ 的槽不因应用预设被降级成 REG_SZ（2026-10-18）
+        foreach (var kv in todo) SoundScheme.SetSound(kv.Key, kv.Value, ProfileStore.VoiceWriteKind(kv.Key));
 
         var allSkipped = skippedByUser.Concat(missing).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
         return new PresetApplyResult(todo.Count, skippedByUser.Count, missing.Count, allSkipped, missing, snapshotPath);

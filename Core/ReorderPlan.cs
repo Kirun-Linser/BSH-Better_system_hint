@@ -93,7 +93,8 @@ public static class ReorderPlan
                 log.Add($"跳过 {item.Event} —— 素材不存在：{item.NewWav}");
                 continue;
             }
-            SoundScheme.SetSound(item.Event, full);
+            // 值类型按基线保真：不把原本 REG_EXPAND_SZ 的槽降级成 REG_SZ（2026-10-18）
+            SoundScheme.SetSound(item.Event, full, ProfileStore.VoiceWriteKind(item.Event));
             log.Add($"{item.Event} → {item.NewWav}（{item.Reason}）");
         }
         return log;

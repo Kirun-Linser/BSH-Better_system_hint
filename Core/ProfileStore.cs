@@ -441,7 +441,7 @@ public static class ProfileStore
                 int n = 0;
                 foreach (var (evt, wav) in scheme.Resolve())
                 {
-                    SoundScheme.SetSound(evt, wav);
+                    SoundScheme.SetSound(evt, wav, VoiceWriteKind(evt));
                     n++;
                 }
                 return new ApplyResult(p.Id, n, 0, SlotsWritten: true, EngineStarted: false, Note: null);
@@ -515,7 +515,9 @@ public static class ProfileStore
                 int cleared = 0;
                 foreach (var evt in TakeoverSilenceSlots)
                 {
-                    SoundScheme.SetSound(evt, "");
+                    // 清空也保类型：原本是 ExpandString 的槽写回空串时仍用 ExpandString，
+                    // 避免「清一次槽就把 22 个槽的类型全降级成 String」（2026-10-18 修）。
+                    SoundScheme.SetSound(evt, "", VoiceWriteKind(evt));
                     cleared++;
                 }
 
@@ -603,9 +605,9 @@ public static class ProfileStore
         int n = 0;
         foreach (var (evt, wav) in resolved.Writes)
         {
-            // 值类型一律 REG_SZ：语音方案是自写的新值，本没有"原本是什么类型"可言；
-            // 想回到原类型/原字面值，走「Windows 原样」（它按基线保真还原，含 22 个 ExpandString）。
-            SoundScheme.SetSound(evt, wav);
+            // 值类型不再一律 REG_SZ：原本是 REG_EXPAND_SZ 的槽按原类型写（见 VoiceWriteKind）。
+            // 这样「个性化设置」本身就不会把类型降级；想连字面值一起回到原样仍走「Windows 原样」。
+            SoundScheme.SetSound(evt, wav, VoiceWriteKind(evt));
             n++;
         }
         return n;
@@ -915,6 +917,54 @@ public static class ProfileStore
         {
             return null;
         }
+    }
+
+    /// <summary>基线 事件 → 原始槽 的缓存（懒加载；基线读不到时为空表，键不存在）。</summary>
+    private static Dictionary<string, BaselineSlot>? _baselineByEvent;
+
+    /// <summary>取基线映射（懒加载；读不到就返回空表，不影响正常写槽）。</summary>
+    private static Dictionary<string, BaselineSlot> BaselineByEvent()
+    {
+        if (_baselineByEvent is not null) return _baselineByEvent;
+
+        var map = new Dictionary<string, BaselineSlot>(StringComparer.OrdinalIgnoreCase);
+        var windowsDefault = Find(WindowsDefaultId);
+        var slots = windowsDefault is null ? null : LoadBaseline(windowsDefault, out _);
+        if (slots is not null)
+        {
+            foreach (var slot in slots) map[slot.Event] = slot;
+        }
+        return _baselineByEvent = map;
+    }
+
+    /// <summary>
+    /// 语音 / 预设 / 手工替换写槽时该用的值类型：<b>基线里原本是 REG_EXPAND_SZ 的槽，继续按 REG_EXPAND_SZ 写</b>。
+    /// <para>
+    /// 为什么需要它（2026-10-18 修上一轮遗留）：本机原始 59 槽里有 22 个是
+    /// <c>REG_EXPAND_SZ</c>（字面值 <c>%SystemRoot%\media\X.wav</c>）。此前所有"换音"路径都按
+    /// <c>REG_SZ</c> 写，导致<b>只要应用过语音方案，这些槽的类型就被降级</b> —— 值读出来虽然一样，
+    /// 但已经需要靠「Windows 原样」才能回到原类型。现在写槽时按基线类型保真，降级从源头消失。
+    /// </para>
+    /// <para>
+    /// 回退口径：基线里没有的事件（用户自建 / 系统新增）看现场类型 —— 现场是 ExpandString 就继续用；
+    /// 其余一律 String。写入的是绝对路径，ExpandString 展开后不变，所以不影响播放。
+    /// </para>
+    /// </summary>
+    /// <param name="eventName">事件名（注册表子键名）。</param>
+    internal static RegistryValueKind VoiceWriteKind(string eventName)
+    {
+        if (BaselineByEvent().TryGetValue(eventName, out var slot))
+        {
+            // 基线里"无值"的槽（Missing）本来没有类型可言，写成 String 即可
+            return slot is { Missing: false, ValueKind: RegistryValueKind.ExpandString }
+                ? RegistryValueKind.ExpandString
+                : RegistryValueKind.String;
+        }
+
+        var now = SoundScheme.ReadRaw(eventName);
+        return now.Kind == RegistryValueKind.ExpandString
+            ? RegistryValueKind.ExpandString
+            : RegistryValueKind.String;
     }
 
     /// <summary>
