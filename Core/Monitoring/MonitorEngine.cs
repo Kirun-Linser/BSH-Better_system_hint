@@ -212,6 +212,16 @@ public sealed class MonitorEngine : IDisposable
         }
     }
 
+    /// <summary>
+    /// 自检用：取某类监听器的实例（未启动 / 启动失败返回 <c>null</c>）。
+    /// <para>仅供 <see cref="MonitorSelfTest"/> 做「自投递消息」类的事件级验证（设备 / 电源），不对外暴露。</para>
+    /// </summary>
+    /// <param name="kind">监听类别。</param>
+    internal IMonitorSource? FindSource(MonitorEventKind kind)
+    {
+        lock (_gate) return _sources.TryGetValue(kind, out var source) ? source : null;
+    }
+
     /// <summary>取状态快照。</summary>
     public MonitorStatus Status()
     {

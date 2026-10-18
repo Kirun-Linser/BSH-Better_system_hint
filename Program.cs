@@ -796,7 +796,8 @@ static class Program
 
     /// <summary>
     /// 监听引擎自检：<c>--monitor-selftest &lt;秒数&gt;</c>。
-    /// 缺省秒数为 4；实测输出与退出码由 <see cref="MonitorSelfTest"/> 负责（0 通过 / 1 键盘不足 / 2 文件不足 / 3 都不足）。
+    /// 缺省秒数为 4；实测输出与退出码由 <see cref="MonitorSelfTest"/> 负责
+    /// （位掩码：0 全通过 / 1 键盘不足 / 2 文件不足 / 4 扩展项不足；多项失败按位或，如 3 / 7）。
     /// </summary>
     private static int MonitorSelftestCommand(string[] args)
     {
@@ -811,7 +812,10 @@ static class Program
         var outcome = MonitorSelfTest.Run(seconds, WriteLine);
 
         // 末行固定为可解析的英文摘要（正文是中文叙述）
-        WriteLine($"selftest exit={outcome.ExitCode} keyboard={outcome.KeyboardEvents} files={outcome.FileEvents} triggered={outcome.Triggered}");
+        WriteLine($"selftest exit={outcome.ExitCode} keyboard={outcome.KeyboardEvents} files={outcome.FileEvents} triggered={outcome.Triggered} "
+                  + $"mouseDown={outcome.MouseLeftDown} mouseUp={outcome.MouseLeftUp} wheel={outcome.MouseWheel} "
+                  + $"window={outcome.WindowSwitchEvents} clipboard={outcome.ClipboardEvents} "
+                  + $"device={outcome.DeviceEvents} power={outcome.PowerEvents} extendedPassed={outcome.ExtendedPassed}");
         return outcome.ExitCode;
     }
 

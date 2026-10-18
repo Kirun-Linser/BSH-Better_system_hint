@@ -137,6 +137,23 @@ public sealed class PowerSessionMonitor : MonitorSourceBase
         };
     }
 
+    /// <summary>
+    /// 自检用：向<b>自己的隐藏窗口</b>同步投递一条「恢复」消息（<c>PBT_APMRESUMEAUTOMATIC</c>）。
+    /// <para>
+    /// ⚠️ 诚实边界：这验证的是<b>消息处理路径</b>（wParam → <c>Resume</c> → 投递），
+    /// <b>不是</b>真实挂起 / 恢复广播的送达 —— 真实睡眠不可自动化，也可能根本不广播给普通顶层窗口。
+    /// </para>
+    /// </summary>
+    internal bool SimulateResume()
+    {
+        var handle = _window?.Handle ?? IntPtr.Zero;
+        if (handle == IntPtr.Zero) return false;
+
+        // SendMessage 同步：窗口过程处理完才返回
+        SendMessageW(handle, WM_POWERBROADCAST, new IntPtr(PBT_APMRESUMEAUTOMATIC), IntPtr.Zero);
+        return true;
+    }
+
     // ── Win32 ────────────────────────────────────────────────────────────────
 
     [StructLayout(LayoutKind.Sequential)]
@@ -152,4 +169,7 @@ public sealed class PowerSessionMonitor : MonitorSourceBase
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 }

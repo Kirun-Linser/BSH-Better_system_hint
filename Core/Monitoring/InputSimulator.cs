@@ -15,8 +15,12 @@ namespace BSH.Core.Monitoring;
 public static class InputSimulator
 {
     private const uint INPUT_KEYBOARD = 1;
+    private const uint INPUT_MOUSE = 0;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
+    private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    private const uint MOUSEEVENTF_WHEEL = 0x0800;
 
     /// <summary>按下（不抬起）。返回是否注入成功。</summary>
     public static bool KeyDown(ushort virtualKey) => Send(virtualKey, false);
@@ -37,6 +41,48 @@ public static class InputSimulator
     /// <summary>按名字完成一次「按下 → 抬起」（名字取 <see cref="VirtualKeyNames"/> 表，如 <c>F24</c> / <c>A</c>）。</summary>
     public static bool KeyPress(string keyName, int holdMs = 30) =>
         VirtualKeyNames.TryParse(keyName, out int vk) && KeyPress((ushort)vk, holdMs);
+
+    /// <summary>
+    /// 鼠标左键「按下 → 抬起」（<c>--monitor-selftest</c> 用）。
+    /// <para>⚠️ 点击会落在<b>光标当前所在窗口</b>上；自检会先把光标移到自建的测试窗口上再注入。</para>
+    /// </summary>
+    /// <param name="holdMs">按下与抬起之间的间隔（毫秒）。</param>
+    public static bool MouseLeftClick(int holdMs = 30)
+    {
+        bool ok = SendMouse(MOUSEEVENTF_LEFTDOWN, 0);
+        if (holdMs > 0) Thread.Sleep(holdMs);
+        return SendMouse(MOUSEEVENTF_LEFTUP, 0) && ok;
+    }
+
+    /// <summary>滚轮：<paramref name="delta"/> 为正 = 向上滚一格（120 为标准一格）。</summary>
+    public static bool MouseWheel(int delta = 120) => SendMouse(MOUSEEVENTF_WHEEL, delta);
+
+    /// <summary>把光标移到屏幕坐标（屏幕坐标系，单位像素）。</summary>
+    public static bool MouseMoveTo(int screenX, int screenY) => SetCursorPos(screenX, screenY);
+
+    private static bool SendMouse(uint flags, int mouseData)
+    {
+        var input = new INPUT
+        {
+            type = INPUT_MOUSE,
+            U = new INPUTUNION
+            {
+                mi = new MOUSEINPUT
+                {
+                    dx = 0,
+                    dy = 0,
+                    mouseData = unchecked((uint)mouseData),
+                    dwFlags = flags,
+                    time = 0,
+                    dwExtraInfo = IntPtr.Zero,
+                },
+            },
+        };
+
+        uint sent = SendInput(1, [input], Marshal.SizeOf<INPUT>());
+        LastErrorCode = sent == 1 ? 0 : Marshal.GetLastWin32Error();
+        return sent == 1;
+    }
 
     /// <summary>最近一次 <c>SendInput</c> 的 Win32 错误码（成功时为 0），用于诊断「注入被拒」。</summary>
     public static int LastErrorCode { get; private set; }
@@ -131,4 +177,7 @@ public static class InputSimulator
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetCursorPos(int x, int y);
 }

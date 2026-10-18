@@ -116,6 +116,45 @@ public sealed class DeviceMonitor : MonitorSourceBase
         }
     }
 
+    /// <summary>
+    /// 自检用：向<b>自己的隐藏窗口</b>同步投递一条「卷到达」消息（<c>SendMessage</c>，处理完才返回）。
+    /// <para>
+    /// ⚠️ 诚实边界：这验证的是<b>消息处理路径</b>（wParam/lParam 解析 → 盘符 → 事件明细），
+    /// <b>不是</b>系统硬件广播的送达 —— 真实 U 盘插拔无法自动化，也没有可编程的虚拟设备可用。
+    /// </para>
+    /// </summary>
+    /// <param name="driveLetter">假装到达的盘符（默认 Z，避免与真实盘符混淆）。</param>
+    /// <returns>窗口存在且消息已投递为 true。</returns>
+    internal bool SimulateVolumeArrival(char driveLetter = 'Z')
+    {
+        var handle = _window?.Handle ?? IntPtr.Zero;
+        if (handle == IntPtr.Zero) return false;
+
+        int letter = char.ToUpperInvariant(driveLetter) - 'A';
+        if (letter < 0 || letter >= 26) letter = 25;
+
+        var volume = new DEV_BROADCAST_VOLUME
+        {
+            dbcv_size = Marshal.SizeOf<DEV_BROADCAST_VOLUME>(),
+            dbcv_devicetype = DBT_DEVTYP_VOLUME,
+            dbcv_reserved = 0,
+            dbcv_unitmask = 1u << letter,
+            dbcv_flags = 0,
+        };
+
+        IntPtr buffer = Marshal.AllocHGlobal(volume.dbcv_size);
+        try
+        {
+            Marshal.StructureToPtr(volume, buffer, false);
+            SendMessageW(handle, WM_DEVICECHANGE, new IntPtr(DBT_DEVICEARRIVAL), buffer);
+            return true;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
     // ── Win32 ────────────────────────────────────────────────────────────────
 
     [StructLayout(LayoutKind.Sequential)]
@@ -151,4 +190,7 @@ public sealed class DeviceMonitor : MonitorSourceBase
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UnregisterDeviceNotification(IntPtr handle);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 }
