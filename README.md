@@ -15,12 +15,15 @@ BSH 给两条互不冲突的路：
 
 ## 1. 功能一览
 
-### 1.1 两套方案
+### 1.1 三套方案 + 预设
 
 | 方案 id | 界面名 | 类型 | 真实动作 | 写注册表？ |
 |---|---|---|---|---|
 | `windows-default` | Windows 原样（还原 + 停止监听） | `RestoreBaseline` | **先停监听引擎**，再把 59 槽逐项还原成基线值 | ✅ 写 `HKCU` |
 | `personal` | 个性化设置（换提示音 + 启用监听） | `Monitor` | ① 把未被 `skipFreq`/`skipEvents` 跳过的槽指向语音（**本机当前配置 = 36 槽**：39 个现存事件中跳过 3 个）② 按规则表启动监听引擎 | ✅ 写（跳过的槽**不碰**） |
+| `takeover` | BSH 接管（改由规则判断） | `Takeover` | 清空 **18 个**槽（10 个交给 BSH 规则判断 + 8 个界面音关掉），其余 21 槽保持系统原样；然后启动监听引擎 | ✅ 写（只清这 18 个） |
+
+> 三套方案之外还有**预设**（`profiles/presets/<id>/`）—— 一套「事件 → 音频」映射（+ 可选规则集），见 1.6。
 
 - 内置方案登记见 `Core/ProfileStore.cs:52`，`personal` 的 `Kind` 是 `Monitor`（`Core/ProfileStore.cs:61`）。
 - 还原是**类型保真**的：基线里 22 个槽原本是 `REG_EXPAND_SZ`（字面值 `%SystemRoot%\media\X.wav`），还原时按原类型写回，绝不降级成 `REG_SZ`（`Core/SoundScheme.cs:186`、`Core/ProfileStore.cs:244`）。
@@ -64,6 +67,56 @@ BSH 给两条互不冲突的路：
 2. 规则里 `speakKey` 写**事件名**，从语音方案（`%LOCALAPPDATA%\BSH\sounds\voice-scheme.json`）里取（`Core/Monitoring/MonitorEngine.cs:308`、`Core/VoiceScheme.cs:19`）。
 
 素材是本地自制的，生成脚本在 `tools/`（**当前实装的是 Edge 神经语音**：`tools/make-edge-batch.py` 合成 Aria×Michelle 混合、字幕真源 `voice/lines.json` rev3，经 `tools/install-voice.ps1` 装到 `%LOCALAPPDATA%\BSH\sounds\`）。判定依据（2026-10-11 实测）：装机那 39 个 wav 与 `voice/edge-batch/out/` 的产物 **39/39 逐字节相同**（2026-10-11 删除 20 个循环事件后从 59 条缩减到 39 条）。另有两条早期试过、**未采用**的路线：**SAPI `Microsoft Zira Desktop` + `tools/robotize.py` 机械化后处理**，与 **EVA 风格后处理**（`tools/make-eva-voice.py`）。产物一律不入库（见第 8 节）。
+
+### 1.5 「BSH 接管」与开机自启
+
+「BSH 接管」是**不改音、改由 BSH 判断响不响**的一套方案（`ProfileKind.Takeover`）：
+
+- **清空 18 个槽**（`Core/ProfileStore.cs` 的 `TakeoverSilenceSlots`）：
+  - **10 个交给 BSH 规则判断**：`Open` / `Close`（程序启停）、`DeviceConnect` / `DeviceDisconnect` / `DeviceFail`（设备插拔）、`WindowsLogon` / `WindowsLogoff` / `WindowsUnlock`（会话）、`LowBatteryAlarm` / `CriticalBatteryAlarm`（电池）；
+  - **8 个界面音关掉**：`Maximize` / `Minimize` / `RestoreUp` / `RestoreDown` / `CCSelect` / `MenuCommand` / `MenuPopup` / `ShowBand`。
+- 其余 21 个槽**保持系统原样**（不像「个性化设置」那样整批换音）。
+- 清空的槽**必须由规则表补上声音**，所以这条方案要和 `profiles/personal/rules.json` 配合用（本机现有 `app-open` / `app-close` 两条进程启停规则，白名单 10 个程序）。
+- **退出即还原**（`TrayContext.RestoreIfTakeover`）：若当前活动方案是 `takeover`，退出 BSH 时按基线逐项还原 —— 那 18 个槽的语义是"改由 BSH 判断"，BSH 不在就没人判断，提示音会静默消失；所以「退出还原」和「开机自启」是**一对**，闭环才是「开机 → BSH 起来接管 → 退出 → 系统提示音还回去」。
+- **开机自启**：托盘右键「开机自启动」勾选，写 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `BSH` 值（用户级、不需要管理员；`Core/AutoStart.cs`）。自包含 exe 直接登记自身路径；`dotnet BSH.dll` 形态会把 dll 路径一并写上。
+- 界面入口：面板按钮 **「BSH 接管」**；命令行 `--apply-profile takeover`。
+
+### 1.6 预设体系（PresetStore）
+
+**一个预设 = 一套「事件 → 音频」映射 + 一套（可选的）监听规则集**，可整体应用到系统。与上面的"方案"并列：方案管"怎么响"，预设管"用哪套音"。
+
+```
+profiles/presets/<id>/
+├─ preset.json     预设定义（名字 / 说明 / builtin / 声音映射 / 规则）
+└─ sounds/         该预设自带的音频（可选；也可以复用 %LOCALAPPDATA%\BSH\sounds 里的装机音频）
+```
+
+```json
+{
+  "id": "eva-mech",
+  "name": "BSH EVA",
+  "description": "Edge TTS 合成 + EQ 塑形，39 槽全配",
+  "builtin": true,
+  "sounds": {
+    "SystemAsterisk": "sounds/信息（星号）,Information. A new message has arrived.wav",
+    "DeviceConnect": "sounds/设备已连接,Device detected.wav"
+  },
+  "rules": []
+}
+```
+
+- **内置预设**：`mech-voice`（界面名 **「BSH」**）与 `eva-mech`（**「BSH EVA」**）；`builtin: true` 的只读。
+- **`sounds` 的值怎么解析**（`PresetStore.ResolveAudio`）：
+  1. `sounds/xxx.wav` → 先找 `%LOCALAPPDATA%\BSH\presets\<id>\sounds\`，**找不到回退**到 `profiles\presets\<id>\sounds\`（随 exe 分发的那份，绿色版「解压即用」靠它）；
+  2. 绝对路径 → 直接用；
+  3. 纯文件名 → 在 `%LOCALAPPDATA%\BSH\sounds\` 里找（复用装机音频）。
+- **应用预设**：界面「预设下拉 + 应用预设…」（先把"会写多少 / 按偏好跳过多少 / 音频缺失多少"摆给你看 → 确认 → 自动快照 → 写入），或命令行 `--apply-preset <id> [快照路径]`。
+  - 顺序与「Windows 原样」一致：**先停监听引擎 → 自动快照 → 再逐槽写**；
+  - **尊重 `personal/profile.json` 的跳过偏好**（本机 = 不碰 `CCSelect` / `Open` / `Close` 这 3 个槽）；
+  - **音频缺失的槽跳过并汇总**，不会整批失败；
+  - 写槽同样按基线保类型（见 1.1）。
+- **用户自建**：界面「新建预设…」（默认名 **「个性化设置」**，id 自动 `my-N`，**空壳**，`sounds` 为空 = 应用它不改任何槽）、「预设改名…」（内置也允许改，改的是本地 `preset.json` 的 `name`）；删除只允许用户自建预设（会连 `%LOCALAPPDATA%\BSH\presets\<id>\sounds\` 一起删）。`--capture-preset`（把当前系统槽反捕成预设）**尚未实现**。
+- **只读列出**：`--preset-list` 会打印每个预设的 `builtin / sounds / rules / missing` 与坏预设的跳过原因。
 
 ---
 
@@ -112,11 +165,28 @@ $env:DOTNET_ROOT="$env:USERPROFILE\.dotnet"
 
 （`dist/`、`dist-new/` 已在 `.gitignore` 里排除；仓库不发布二进制。）
 
+### 2.5 便携部署（绿色版，解压即用）
+
+**当前 Release**（v0.1.0）提供 `BSH-portable.zip`（约 58 MB / 87 条目），内容：
+
+| 条目 | 说明 |
+|---|---|
+| `BSH.exe` | 自包含单文件（约 51.8 MB），**不需要装 .NET、不需要 `DOTNET_ROOT`、不需要管理员** |
+| `profiles/` | 基线 + 两个预设（含它们自己的 78 个 wav，因此预设**开箱可用**、不用先跑安装脚本） |
+| `使用说明.txt` | 零依赖、不需要管理员、shell 音效需重启 explorer、「BSH 接管」行为与退出还原、卸载步骤 |
+
+可移植性的两个前提（2026-10-11 审计 + 实测）：
+
+1. **主程序不依赖任何自定义环境变量**，也没有硬编码本机路径；只用标准的 `%LOCALAPPDATA%` / `%APPDATA%` / `%WINDIR%`，依赖目录会自动创建。
+2. **预设音频有两处查找**（见 1.6）：先从 `%LOCALAPPDATA%\BSH\presets\<id>\sounds\`（本机装机位），找不到回退到 `profiles\presets\<id>\sounds\`（随包分发的那份）。实测把 `%LOCALAPPDATA%` 那份临时改名后，两个预设仍 `missing=0`。
+
+⚠️ 局限：绿色版只带**主程序 + 预设音频**；`%LOCALAPPDATA%\BSH\sounds\` 那套 39 条装机语音与个人 `rules.json` 属于个人数据，**不随包分发**，需要时从本机复制或重新生成（见 1.4）。
+
 ---
 
 ## 3. CLI 参数表
 
-参数名常量集中定义在 `Program.cs:11`–`Program.cs:29`，入口分派在 `Program.cs:49`。
+参数名常量集中定义在 `Program.cs:11`–`Program.cs:38`，入口分派在 `Program.cs:61` 起。
 
 | 参数 | 形态 | 作用 | 写注册表？ | 退出码（源码位置） |
 |---|---|---|---|---|
@@ -125,7 +195,9 @@ $env:DOTNET_ROOT="$env:USERPROFILE\.dotnet"
 | `--monitor-report` | `[输出路径]` | 监听引擎体检：对 8 类监听器各做一次「探针启动 → 读状态 → 立刻停止」，报告里的「可启动」是实测值 | ❌ 只读 | 0 成功 / 5 写盘失败（`Program.cs:442`） |
 | `--monitor-status` | `[--live]` | 监听接线状态：规则表路径与存在性、启用条数、8 类监听器的装机前提、只读预演。**默认不启引擎** | ❌ 只读 | 0 / 8（`--live` 时监听器没起齐）（`Program.cs:266`） |
 | `--monitor-selftest` | `<秒数>` | 监听引擎自检：真装钩子并做**事件级实测** —— `SendInput` 注入 3 次 `F24`、真写 2 个文件、真写剪贴板再恢复、真建自检窗口做跨进程前台切换、注入鼠标左键与滚轮；设备 / 电源两项用「向隐藏窗口自投递消息」做处理器级实测；缺省 4 秒 | ❌ 只读（会短暂显示自检窗口、移动光标、覆盖剪贴板，三项均立即恢复） | 位掩码：0 全通过 / 1 键盘不足 / 2 文件不足 / **4 扩展项（鼠标·窗口·剪贴板·设备·电源）不足**；多项失败按位或（如 3 / 7）（`Core/Monitoring/MonitorSelfTest.cs`） |
-| `--apply-profile` | `<方案id> [快照路径]` | 应用方案。两类都会写注册表（个人化写语音槽、Windows 原样写还原值）；**还原类写前自动快照**，个人化**不写快照**（`Program.cs:287` 固定输出 `snapshot=none`，它的回滚走「Windows 原样」+ 基线） | ✅ 还原类会 | 0 / 3 方案 id 不存在 / 4 应用失败（`Program.cs:197`） |
+| `--apply-profile` | `<方案id> [快照路径]` | 应用三套方案之一：`windows-default`（还原）/ `personal`（换音 + 监听）/ **`takeover`（清 18 槽 + 监听；退出时自动还原）**。**还原类写前自动快照**，个人化与接管不写快照（`Program.cs` 固定输出 `snapshot=none`，回滚走「Windows 原样」+ 基线） | ✅ 会 | 0 / 3 方案 id 不存在 / 4 应用失败 |
+| `--preset-list` | — | 列出全部可用预设（`builtin / sounds / rules / missing`），坏预设列在末尾「⚠️ 跳过」里，**一个都没有不算错误** | ❌ 只读 | 恒 0 |
+| `--apply-preset` | `<预设id> [快照路径]` | 应用预设：**先停监听引擎 → 自动快照 → 逐槽写**；尊重 `personal` 的跳过偏好；音频缺失的槽跳过并汇总 | ✅ 会 | 0 / 3 预设不存在 / 4 全部音频缺失或写入失败 |
 | `--snapshot-check` | `capture <输出>`｜`normalize <输入> <输出>`｜`plan <输入>` | 快照类型保真的自检；**不调用** `SchemeSnapshot.Apply`，唯一的写盘是调用方指定的那个 JSON | ❌ 只读 | 0 / 6 参数不对或读写失败（`Core/SnapshotSelfCheck.cs:24`） |
 | `--slot-plan` | `<快照文件>` | 槽位还原动作的**只读投影**：逐槽打印 `SetValue(ExpandString)` / `DeleteValue` / `DeleteSubKeyTree` | ❌ 只读，且**不写任何文件** | 0 / 7（`Core/SlotPlanSelfCheck.cs:27`） |
 
@@ -144,12 +216,14 @@ $env:DOTNET_ROOT="$env:USERPROFILE\.dotnet"
 ```
 BSH/
 ├─ BSH.csproj                      net10.0-windows / WinExe / UseWindowsForms
-├─ Program.cs                      CLI 参数与入口分派（719 行）
-├─ MainForm.cs                     主面板：事件总览（当前系统 39 槽；基线 59 项）/ 试听 / 替换 / 静音 / 一键重排 / 快照
+├─ Program.cs                      CLI 参数与入口分派（848 行）
+├─ MainForm.cs                     主面板：事件总览（当前系统 39 槽；基线 59 项）/ 试听 / 替换 / 静音 / 一键重排 / 快照 / 三套方案 + 预设
 ├─ TrayContext.cs                  托盘常驻 + 菜单 + 引擎生命周期兜底
 ├─ Core/
-│  ├─ SoundScheme.cs               注册表读写 + 类型保真还原 + SchemeSnapshot（587 行）
-│  ├─ ProfileStore.cs              两套方案的登记 / 只读预演 / 应用
+│  ├─ SoundScheme.cs               注册表读写 + 类型保真还原 + SchemeSnapshot（589 行）
+│  ├─ ProfileStore.cs              三套方案的登记 / 只读预演 / 应用（含 VoiceWriteKind 类型保真，1082 行）
+│  ├─ PresetStore.cs               预设仓库：列表 / 加载 / 应用 / 新建 / 改名 / 删除 + 音频路径回退
+│  ├─ AutoStart.cs                 开机自启（只写 HKCU 的 Run 键）
 │  ├─ SoundProfile.cs              方案记录与 ProfileKind 枚举
 │  ├─ AppEventCatalog.cs           事件的中文说明与分组（界面用）
 │  ├─ ReorderPlan.cs               一键重排：空槽 / 撞车 → 目标 wav
@@ -180,6 +254,7 @@ BSH/
 │     └─ InputSimulator.cs         SendInput 注入（自检用）
 ├─ profiles/
 │  ├─ windows-default/baseline-appevents.json   59 槽基线（35 String + 22 ExpandString + 2 Missing）
+│  ├─ presets/<id>/preset.json                  预设定义：内置 mech-voice（界面名「BSH」）/ eva-mech（「BSH EVA」）；自带音频不入库
 │  └─ personal/
 │     ├─ profile.json              方案定义（kind / applyVoiceScheme / skipFreq / skipEvents）
 │     ├─ README.md                 个人配置目录的约定说明
@@ -188,7 +263,7 @@ BSH/
 │     └─ sounds/.gitkeep           ❌ 真实音频（个人素材，仅留目录骨架）
 ├─ tools/                          验证脚本（verify-*.py）与语音生成脚本（make-*.py / make-voice.ps1 / install-voice.ps1）
 ├─ voice/                          ❌ 自制音频工作目录（原始素材 + 中间产物，整体不入库）
-├─ dist/  dist-new/                ❌ 发布产物（自包含单文件 BSH.exe，不入库）
+├─ dist/  dist-new/                ❌ 发布产物（自包含单文件 BSH.exe，不入库；绿色版 zip 见 Release）
 ├─ report.json                     ❌ --report 的默认输出（不入库）
 └─ verify-profiles*.json           本机验收脚本产出的快照 / 报告（未列入 .gitignore，提交前请自行确认）
 ```
@@ -323,6 +398,11 @@ JSON 用**小写驼峰**（`RuleStore` 的序列化策略是 `CamelCase` + 属�
   `Open` / `Close` 交给监听引擎（这两个事件**任何程序**都能触发，后台同步、索引器、自动更新都会碰，
   直接配在槽里会「没操作也响」）。**当前处置：保留功能、不改代码**（用户 2026-10-11 决定，自己注意不点）；
   点之前可以用 `--report` 先看完整的 `reorderPlan`。
+- **「BSH 接管」的还原只在正常退出时触发**（`TrayContext.RestoreIfTakeover` 挂在 `ApplicationExit`）：进程被任务管理器强杀 / 崩溃时不会执行，那 18 个槽会保持清空 —— 重启 BSH 会重新接管，或手动点「Windows 原样」。
+- **「BSH 接管」清掉的 10 个槽必须靠 `rules.json` 补音**：规则表缺失 / 全部禁用时，这 10 个提示音会静默消失（是配置问题，不是崩溃）。本机 `rules.json` 目前只有 `app-open` / `app-close` 两条进程启停规则。
+- **用户新建的预设是空壳**（`sounds` 为空 = 应用它不改任何槽）；`--capture-preset`（把当前系统槽反捕成预设）**尚未实现**，目前只能手写 `sounds` 映射。
+- **预设里的 `rules` 字段会被读入，但应用预设目前只写声音槽、不安装预设自带规则** —— 监听规则仍以 `profiles/personal/rules.json` 为准。
+- **绿色版便携包不含个人数据**：`%LOCALAPPDATA%\BSH\sounds\` 的 39 条装机语音、个人 `rules.json` 不随包分发（体积与音源授权原因）。
 
 ### 6.3 注册表安全性
 
