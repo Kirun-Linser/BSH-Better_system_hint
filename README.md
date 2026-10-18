@@ -6,7 +6,7 @@
 
 BSH 给两条互不冲突的路：
 
-- **「Windows 原样」**：把 59 个系统声音事件槽**逐字节还原**成改造前的原始值（含注册表类型与「键在无值」形态），并停止监听 —— 一键回到出厂状态。
+- **「Windows 原样」**：把 **59 项基线**里的系统声音事件槽**逐字节还原**成改造前的原始值（含注册表类型与「键在无值」形态），并停止监听 —— 一键回到出厂状态。⚠️ 基线是 59 项，其中 20 个 `Notification.Looping.*`（循环铃声 / 来电）已于 2026-10-11 按用户要求**从系统删除**，所以现在系统里是 **39 个事件槽**；还原会把这 20 个一并建回来（"原样"就该是 59 个，删除可逆）。
 - **「个性化设置」**：**两件事一起做** —— ① 把未被跳过的系统声音事件槽指向自制语音；② 按 `profiles\personal\rules.json` 里启用的规则安装钩子，命中时补播你配的提示音。
 
 > 一切写入都只在 `HKCU`（当前用户），**不需要管理员权限**，不改任何系统文件。
@@ -20,10 +20,11 @@ BSH 给两条互不冲突的路：
 | 方案 id | 界面名 | 类型 | 真实动作 | 写注册表？ |
 |---|---|---|---|---|
 | `windows-default` | Windows 原样（还原 + 停止监听） | `RestoreBaseline` | **先停监听引擎**，再把 59 槽逐项还原成基线值 | ✅ 写 `HKCU` |
-| `personal` | 个性化设置（换提示音 + 启用监听） | `Monitor` | ① 把未被 `skipFreq`/`skipEvents` 跳过的槽指向语音（当前配置 = 56 槽）② 按规则表启动监听引擎 | ✅ 写（跳过的槽**不碰**） |
+| `personal` | 个性化设置（换提示音 + 启用监听） | `Monitor` | ① 把未被 `skipFreq`/`skipEvents` 跳过的槽指向语音（**本机当前配置 = 36 槽**：39 个现存事件中跳过 3 个）② 按规则表启动监听引擎 | ✅ 写（跳过的槽**不碰**） |
 
 - 内置方案登记见 `Core/ProfileStore.cs:52`，`personal` 的 `Kind` 是 `Monitor`（`Core/ProfileStore.cs:61`）。
 - 还原是**类型保真**的：基线里 22 个槽原本是 `REG_EXPAND_SZ`（字面值 `%SystemRoot%\media\X.wav`），还原时按原类型写回，绝不降级成 `REG_SZ`（`Core/SoundScheme.cs:186`、`Core/ProfileStore.cs:244`）。
+- **写槽同样保类型（2026-10-18 起）**：「个性化设置」、预设应用、一键重排、单个替换 / 静音都走 `ProfileStore.VoiceWriteKind` —— 基线里原本是 `REG_EXPAND_SZ` 的槽继续按 `REG_EXPAND_SZ` 写，不再因为"换过一次音"就把类型降级（本机现存 2 个：`WindowsLogon` / `WindowsUnlock`；原始 59 槽里是 22 个）。
 - 「键在、无值」的空壳槽（本机 `SystemExit` / `WindowsLogoff`）还原成**删默认值、保留 `.Current` 子键**，不会凭空把键建出来，也不会写成「键 + 空串」（`Core/SoundScheme.cs:284`、`Core/ProfileStore.cs:232`）。
 - 顺序是刻意的：`windows-default` **先停监听再写注册表**，避免还原中途抛异常后钩子还挂在系统里（`Core/ProfileStore.cs:217`）。
 - 通过界面（托盘菜单 / 面板按钮）走的所有还原动作，**写之前自动快照**；`--apply-profile` 这条命令行入口同样先快照后写（`Program.cs:235`）。
@@ -62,7 +63,7 @@ BSH 给两条互不冲突的路：
 1. 规则里 `sound` 直接写 **wav 绝对路径**；
 2. 规则里 `speakKey` 写**事件名**，从语音方案（`%LOCALAPPDATA%\BSH\sounds\voice-scheme.json`）里取（`Core/Monitoring/MonitorEngine.cs:308`、`Core/VoiceScheme.cs:19`）。
 
-素材是本地自制的，生成脚本在 `tools/`（**当前实装的是 Edge 神经语音**：`tools/make-edge-batch.py` 合成 Aria×Michelle 混合、字幕真源 `voice/lines.json` rev3，经 `tools/install-voice.ps1` 装到 `%LOCALAPPDATA%\BSH\sounds\`）。判定依据（2026-10-11 实测）：装机那 59 个 wav 与 `voice/edge-batch/out/` 的产物 **59/59 逐字节相同**。另有两条早期试过、**未采用**的路线：**SAPI `Microsoft Zira Desktop` + `tools/robotize.py` 机械化后处理**，与 **EVA 风格后处理**（`tools/make-eva-voice.py`）。产物一律不入库（见第 8 节）。
+素材是本地自制的，生成脚本在 `tools/`（**当前实装的是 Edge 神经语音**：`tools/make-edge-batch.py` 合成 Aria×Michelle 混合、字幕真源 `voice/lines.json` rev3，经 `tools/install-voice.ps1` 装到 `%LOCALAPPDATA%\BSH\sounds\`）。判定依据（2026-10-11 实测）：装机那 39 个 wav 与 `voice/edge-batch/out/` 的产物 **39/39 逐字节相同**（2026-10-11 删除 20 个循环事件后从 59 条缩减到 39 条）。另有两条早期试过、**未采用**的路线：**SAPI `Microsoft Zira Desktop` + `tools/robotize.py` 机械化后处理**，与 **EVA 风格后处理**（`tools/make-eva-voice.py`）。产物一律不入库（见第 8 节）。
 
 ---
 
@@ -91,7 +92,7 @@ $env:DOTNET_ROOT="$env:USERPROFILE\.dotnet"
 ### 2.3 切换方案
 
 ```powershell
-# ① 个性化设置：改写未被跳过的槽（当前 56 个）＋ 启动监听引擎（0 条规则 = 零钩子）
+# ① 个性化设置：改写未被跳过的槽（本机当前 36 个）＋ 启动监听引擎（0 条规则 = 零钩子）
 & "$env:USERPROFILE\.dotnet\dotnet.exe" bin\Release\net10.0-windows\BSH.dll --apply-profile personal
 
 # ② Windows 原样（还原 + 停止监听）：会写 HKCU，写之前自动快照
@@ -123,7 +124,7 @@ $env:DOTNET_ROOT="$env:USERPROFILE\.dotnet"
 | `--report` | `[输出路径]` | 自检 JSON 报告：事件总数 / 空槽 / 撞车 / 重排预演 / 缺失素材 / 两套方案可用性与预演条数（监听模式附规则表路径、启用条数、将启动哪几类监听器） | ❌ 只读 | 恒 0（`Program.cs:115`，从不设置退出码） |
 | `--monitor-report` | `[输出路径]` | 监听引擎体检：对 8 类监听器各做一次「探针启动 → 读状态 → 立刻停止」，报告里的「可启动」是实测值 | ❌ 只读 | 0 成功 / 5 写盘失败（`Program.cs:442`） |
 | `--monitor-status` | `[--live]` | 监听接线状态：规则表路径与存在性、启用条数、8 类监听器的装机前提、只读预演。**默认不启引擎** | ❌ 只读 | 0 / 8（`--live` 时监听器没起齐）（`Program.cs:266`） |
-| `--monitor-selftest` | `<秒数>` | 监听引擎自检：真装钩子、`SendInput` 注入 3 次 `F24`、真写 2 个文件，按**事件级实测**计数；缺省 4 秒 | ❌ 只读 | 0 通过 / 1 键盘不足 / 2 文件不足 / 3 都不足（`Core/Monitoring/MonitorSelfTest.cs:174`） |
+| `--monitor-selftest` | `<秒数>` | 监听引擎自检：真装钩子并做**事件级实测** —— `SendInput` 注入 3 次 `F24`、真写 2 个文件、真写剪贴板再恢复、真建自检窗口做跨进程前台切换、注入鼠标左键与滚轮；设备 / 电源两项用「向隐藏窗口自投递消息」做处理器级实测；缺省 4 秒 | ❌ 只读（会短暂显示自检窗口、移动光标、覆盖剪贴板，三项均立即恢复） | 位掩码：0 全通过 / 1 键盘不足 / 2 文件不足 / **4 扩展项（鼠标·窗口·剪贴板·设备·电源）不足**；多项失败按位或（如 3 / 7）（`Core/Monitoring/MonitorSelfTest.cs`） |
 | `--apply-profile` | `<方案id> [快照路径]` | 应用方案。两类都会写注册表（个人化写语音槽、Windows 原样写还原值）；**还原类写前自动快照**，个人化**不写快照**（`Program.cs:287` 固定输出 `snapshot=none`，它的回滚走「Windows 原样」+ 基线） | ✅ 还原类会 | 0 / 3 方案 id 不存在 / 4 应用失败（`Program.cs:197`） |
 | `--snapshot-check` | `capture <输出>`｜`normalize <输入> <输出>`｜`plan <输入>` | 快照类型保真的自检；**不调用** `SchemeSnapshot.Apply`，唯一的写盘是调用方指定的那个 JSON | ❌ 只读 | 0 / 6 参数不对或读写失败（`Core/SnapshotSelfCheck.cs:24`） |
 | `--slot-plan` | `<快照文件>` | 槽位还原动作的**只读投影**：逐槽打印 `SetValue(ExpandString)` / `DeleteValue` / `DeleteSubKeyTree` | ❌ 只读，且**不写任何文件** | 0 / 7（`Core/SlotPlanSelfCheck.cs:27`） |
@@ -144,7 +145,7 @@ $env:DOTNET_ROOT="$env:USERPROFILE\.dotnet"
 BSH/
 ├─ BSH.csproj                      net10.0-windows / WinExe / UseWindowsForms
 ├─ Program.cs                      CLI 参数与入口分派（719 行）
-├─ MainForm.cs                     主面板：59 事件总览 / 试听 / 替换 / 静音 / 一键重排 / 快照
+├─ MainForm.cs                     主面板：事件总览（当前系统 39 槽；基线 59 项）/ 试听 / 替换 / 静音 / 一键重排 / 快照
 ├─ TrayContext.cs                  托盘常驻 + 菜单 + 引擎生命周期兜底
 ├─ Core/
 │  ├─ SoundScheme.cs               注册表读写 + 类型保真还原 + SchemeSnapshot（587 行）
@@ -288,19 +289,25 @@ JSON 用**小写驼峰**（`RuleStore` 的序列化策略是 `CamelCase` + 属�
 
 | 监听器 | 验证深度 | 证据 |
 |---|---|---|
-| `Keyboard` | **事件级实测** | `--monitor-selftest` 真发 `SendInput`（模拟键 `F24`）→ 按「事件明细与注入键名完全一致」计数（`Core/Monitoring/MonitorSelfTest.cs:112`） |
-| `FileSystem` | **事件级实测** | 自检真建临时目录并写 2 个文件 → 按路径前缀计数（`MonitorSelfTest.cs:124`） |
-| `ProcessStartStop` | **事件级实测（未自动化）** | 代码未接入 `--monitor-selftest`；仓库内没有对应的自动化脚本，其"实数"来自人工用宿主进程起停的实测，**无法用一条命令复现** |
-| `Mouse` / `WindowSwitch` / `DeviceChange` / `PowerSession` / `Clipboard` | **仅探针级：能启动、能停止** | `--monitor-report` / `--monitor-status` 各做一次「启动 → 读状态 → 立刻停止」（`MonitorSources.cs:91`）。未做事件级实测 —— 真测会抢焦点、覆盖剪贴板、或需要真实硬件事件 |
+| `Keyboard` | **事件级实测** | `--monitor-selftest` 真发 `SendInput`（模拟键 `F24`）→ 按「事件明细与注入键名完全一致」计数（`Core/Monitoring/MonitorSelfTest.cs`） |
+| `FileSystem` | **事件级实测** | 自检真建临时目录并写 2 个文件 → 按路径前缀计数 |
+| `Mouse` | **事件级实测** | 自检建自检窗口 → 把光标移进去 → 真注入左键（LeftDown/LeftUp）与滚轮（WheelUp），按明细计数 |
+| `WindowSwitch` | **事件级实测** | 自检关掉自检窗口后切回原前台窗口（跨进程）→ 按「进程名\|标题」匹配计数。⚠️ 监听器带 `WINEVENT_SKIPOWNPROCESS`：**本进程自己的窗口切前台不会上报**（刻意设计，避免 BSH 自己的界面触发提示音） |
+| `Clipboard` | **事件级实测** | 自检真写一段文本到剪贴板 → 等含 `Text` 的事件 → 立即恢复原剪贴板内容 |
+| `DeviceChange` | **处理器级实测** | 自检向隐藏窗口**自投递** `WM_DEVICECHANGE`（卷到达 Z:）→ 收到 `Arrival` 事件。**真实硬件广播的送达不可自动化**（无虚拟设备可用），只证明「消息进来后能正确解析、投递成事件」 |
+| `PowerSession` | **处理器级实测** | 自检向隐藏窗口**自投递** `WM_POWERBROADCAST`（恢复）→ 收到 `Resume` 事件。**真实睡眠 / 恢复不可自动化**，且可能根本不广播给普通顶层窗口（见 6.2） |
+| `ProcessStartStop` | **事件级实测（未自动化）** | 代码未接入 `--monitor-selftest`；其"实数"来自人工用宿主进程起停的实测，**无法用一条命令复现** |
 
-换句话说：**八类监听器都能装能卸（探针有实测值），但只有键盘与文件两类有内建的事件级自检证据。**
+换句话说：**八类监听器里，键盘 / 文件 / 鼠标 / 窗口切换 / 剪贴板五项是真实注入的事件级实测；设备 / 电源两项是处理器级实测；只有进程启停仍是人工实测。**
+
+> `--monitor-selftest` 的副作用（开始时会打印告知，均自动恢复）：短暂显示一个自检窗口、移动光标、覆盖剪贴板内容。
 
 `--monitor-status --live` 会额外证明「零规则 = 零钩子」与「有规则时真装钩子」互为对照（`Program.cs:317`、`Program.cs:332`）。
 
 ### 6.2 代码里明确标注的限制
 
-- **`DeviceMonitor` 的设备接口通知用了空 GUID**（`DeviceMonitor.cs:55`），即不限定接口类。本机探针实测 `RegisterDeviceNotification` **注册成功**（`--monitor-status` 输出「设备接口通知注册=成功」），但**「卷以外设备的通知能否真的到达」未做验证**；卷设备（U 盘 / 移动硬盘）靠的是系统广播给所有顶层窗口的主路径，与这次注册无关（`DeviceMonitor.cs:8`）。
-- **`PowerSessionMonitor` 的 Suspend / Resume 可能收不到**：它依赖 `WM_POWERBROADCAST`，而现代 Windows 上的挂起 / 恢复**未必广播给普通顶层窗口**。代码只保证消息一到就映射成 `Suspend` / `Resume`（`PowerSessionMonitor.cs:109`），没有在真挂起场景下实测过。锁屏 / 解锁（`SystemEvents.SessionSwitch`）走的是另一条路径，探针里订阅成功。
+- **`DeviceMonitor` 的设备接口通知用了空 GUID**（`DeviceMonitor.cs:55`），即不限定接口类。本机探针实测 `RegisterDeviceNotification` **注册成功**（`--monitor-status` 输出「设备接口通知注册=成功」）；2026-10-18 起 `--monitor-selftest` 还会做**处理器级**实测（自投递卷到达消息 → 收到 `Arrival`），但**「系统真实广播 / 卷以外设备通知能否到达」仍未验证** —— 卷设备（U 盘 / 移动硬盘）靠的是系统广播给所有顶层窗口的主路径，与这次注册无关（`DeviceMonitor.cs:8`）。
+- **`PowerSessionMonitor` 的 Suspend / Resume 可能收不到**：它依赖 `WM_POWERBROADCAST`，而现代 Windows 上的挂起 / 恢复**未必广播给普通顶层窗口**。2026-10-18 起 `--monitor-selftest` 会做**处理器级**实测（自投递 `PBT_APMRESUMEAUTOMATIC` → 收到 `Resume`），但**真实挂起 / 恢复参数下是否真的收到广播仍未实测**。锁屏 / 解锁（`SystemEvents.SessionSwitch`）走的是另一条路径，探针里订阅成功。
 - **`ProcessMonitor` 会漏事件**：1.5 秒轮询 + 按**进程名集合**比对（`ProcessMonitor.cs:19`、`ProcessMonitor.cs:71`）——
   - 启动后立刻退出的短命进程可能被整个漏掉；
   - 已经有一个同名进程在跑时，**再开一个不会报事件**（集合不变）；
@@ -327,7 +334,7 @@ JSON 用**小写驼峰**（`RuleStore` 的序列化策略是 `CamelCase` + 属�
 
 ### 6.4 项目状态
 
-**开发中，未发布。** 没有版本号、没有安装包、没有 CI；`tools/` 里的 `verify-*.py` 是作者本机的验收脚本（`verify-profiles.py` 会调用 `--apply-profile`，**属于会写注册表的脚本，别顺手跑**）。接口与数据格式（`rules.json` 字段、快照格式）仍可能变，历史快照的兼容只做到「旧格式按值推断类型 + 明确告知用户类型是推断的」（`Core/SoundScheme.cs:459`）。
+**已发布 v0.1.0（2026-10-11），仍在开发中。** 公开仓库 <https://github.com/Kirun-Linser/BSH-Better_system_hint>，Release 提供绿色版 `BSH-portable.zip`（免安装、自包含单文件 exe + 预设音频 + 使用说明）；尚无 CI 与安装程序。`tools/` 里的 `verify-*.py` 是作者本机的验收脚本（`verify-profiles.py` 会调用 `--apply-profile`，**属于会写注册表的脚本，别顺手跑**）。接口与数据格式（`rules.json` 字段、快照格式）仍可能变，历史快照的兼容只做到「旧格式按值推断类型 + 明确告知用户类型是推断的」（`Core/SoundScheme.cs`）。
 
 ---
 
@@ -350,6 +357,6 @@ JSON 用**小写驼峰**（`RuleStore` 的序列化策略是 `CamelCase` + 属�
 
 ## 8. 许可与状态
 
-- **状态**：开发中，未发布（无 release、无版本号、无安装程序）。
+- **状态**：**v0.1.0 已发布（2026-10-11）**，Release 为绿色版 `BSH-portable.zip`；功能仍在演进（预设体系 / BSH 接管方案已实现，文档见代码与提交记录）。
 - **许可**：仓库里目前**没有 LICENSE 文件**，作者尚未声明许可条款。在补上之前，请按「保留所有权利」处理 —— 想要复用请先来找作者。
 - 个人素材（`profiles/personal/sounds/`、`voice/`）与自制语音不随代码分发。
